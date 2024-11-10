@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Set path to the control tool.
+[ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
+CONTROL=$CONTROL_PATH/control
+[ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+[ -z "$ADMIN_VERIFY_PIN" ] && printf "WARNING: Variable ADMIN_VERIFY_PIN must be defined (admin pin in hexadecimal), test skipped.\n" && exit 1
+
+[ -z "$LR_ID" ] && LR_ID=1
+
+printf "Regenerating locking range key...\n\n"
+
+$CONTROL -V regenerate_key $DEV			\
+	--locking-range $LR_ID			\
+	--verify-pin-hex=$ADMIN_VERIFY_PIN	\
+	|| { printf "\nFailed to regenerate key of locking range witd id $LR_ID.\n" && exit 1; }
+
+printf "\nDone.\n"

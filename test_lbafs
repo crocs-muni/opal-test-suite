@@ -1,0 +1,82 @@
+#!/bin/bash
+
+set -o pipefail
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+function get_discovery_lbafs {
+    _size=$($DISCOVERY $DEV 3 | jq -r '."Discovery 0"."Geometry Feature".LogicalBlockSize')
+
+    [ $? -ne 0 ] &&
+        # TODO check for other source of LBA size
+	printf "\n${RED}Discovery0 failed, unable to continue!${NC}\n" && exit 1
+
+    printf $_size
+}
+
+# Update opal-toolset submodule
+printf "Updating opal-toolset ...\n"
+git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
+( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+
+[ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
+DISCOVERY=$OPAL_TOOLSET_PATH/discovery
+[ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+
+# Check if device exists
+lsblk $DEV 1>/dev/null || exit 1;
+
+if [[ ! "$(lsblk -o TRAN $DEV)" =~ "nvme"  ]]; then
+    printf "Device $DEV does not use NVMe, tesk skipped.\n"
+    exit 0
+fi
+
+printf "\nAvailable LBAF sizes:\n"
+avail_sizes=()
+
+while read -r ds; do
+    printf "$(( 2 ** $ds ))\n"
+    avail_sizes+=( "$(( 2 ** $ds ))" )
+done < <(nvme id-ns $DEV -H -o json | jq -r ".lbafs[].ds")
+
+ORIG_IOCTL_LBAFS=$(blockdev --getss $DEV)
+ORIG_DISCOVERY_LBAFS=$(get_discovery_lbafs)
+printf "LBAF size in use: $ORIG_IOCTL_LBAFS\n"
+
+# Check if ioctl and Discovery0 report the same LBA size initially
+[ $ORIG_IOCTL_LBAFS -ne $ORIG_DISCOVERY_LBAFS ] && printf "\n${RED}FATAL: LBAF size mismatch before the test${NC}\n" && exit 1
+
+# Look for a different available LBAF size
+for size in ${avail_sizes[@]}; do
+    if [ $size -ne $ORIG_IOCTL_LBAFS ]; then
+        SIZE_TO_SET=$size
+        break
+    fi
+done
+
+[ -z ${SIZE_TO_SET+x} ] && printf "\nOnly one LBA size is available for ${DEV}, test inapplicable, skipped.\n" && exit 1
+
+# Set a different LBA size
+nvme format --block-size=$SIZE_TO_SET $DEV --force >/dev/null
+[ $? -ne 0 ] && printf "\n${RED}Setting sector size failed, unable to continue!${NC}\n" && exit 1
+printf "\nNew LBAF size of $SIZE_TO_SET bytes set successfully.\n\n"
+
+# Check how new LBA size is reported
+printf "LBAF size reported by ioctl: "
+NEW_IOCTL_LBAFS=$(blockdev --getss $DEV)
+printf "$NEW_IOCTL_LBAFS\n"
+[ $ORIG_IOCTL_LBAFS -eq $NEW_IOCTL_LBAFS ] && printf "${RED}WARNING: Change not reported by ioctl${NC}\n"
+
+printf "LBAF size reported by discovery: "
+NEW_DISCOVERY_LBAFS=$(get_discovery_lbafs)
+printf "$NEW_DISCOVERY_LBAFS\n"
+[ $ORIG_DISCOVERY_LBAFS -eq $NEW_DISCOVERY_LBAFS ] && printf "${RED}WARNING: Change not reported by Opal Discovery0${NC}\n"
+
+[ $NEW_IOCTL_LBAFS -ne $NEW_DISCOVERY_LBAFS ] && printf "\n${RED}FATAL: LBAF size mismatch after reformatting${NC}\n" && exit 1
+
+printf "\n${GREEN}Change of LBAFS OK\n${NC}"
+printf "New sector size was propagated and correctly reported by Opal.\n"

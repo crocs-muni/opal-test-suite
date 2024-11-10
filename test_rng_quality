@@ -1,0 +1,77 @@
+#!/bin/bash
+
+function progress {
+    let "_progress = (${1} * 100 / ${2} * 100) / 100"
+    let "_done = (${_progress} * 4) / 10"
+    let "_left = 40 - $_done"
+    _fill=$(printf "%${_done}s")
+    _empty=$(printf "%${_left}s")
+    printf "\r${_fill// /▇}${_empty// /-} ${_progress}%%"
+}
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+AMOUNT=1048576
+
+# Update opal-toolset submodule
+printf "Updating opal-toolset ...\n"
+git submodule update --init --remote --merge >/dev/null
+( cd opal-toolset && make >/dev/null 2>&1 ) || { printf "\nBuild of opal-toolset failed, test skipped.\n" && exit 1; }
+
+[ -z "$OPAL_RNG_PATH" ] && OPAL_RNG_PATH="opal-toolset"
+RNG=$OPAL_RNG_PATH/rng
+[ ! -f "$RNG" ] && printf "Invalid path $RNG, test skipped.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+
+TMPDIR="$(mktemp -d)"
+cd $TMPDIR
+
+gcc -std=c99 -o test ${OLDPWD}/source/chi_squared_test.c || { printf "\nBuild of testing program failed, test skipped.\n" && exit 1; }
+
+printf "Extracting 1MiB of random data ...\n"
+
+${OLDPWD}/${RNG} $DEV -b $AMOUNT -o rng.tmp >/dev/null 2>&1 &
+pid=$!
+trap "kill $pid 2> /dev/null" EXIT
+
+# Wait until the data extraction program creates output file rng.tmp
+while [ ! -f rng.tmp ] && kill -0 $pid 2> /dev/null; do
+    sleep 0.5
+done
+
+# Draw progress during data extraction
+while kill -0 $pid 2> /dev/null; do
+    RNG_CURRENT_SIZE="$(wc -c <rng.tmp)"
+    progress ${RNG_CURRENT_SIZE} ${AMOUNT}
+    sleep .2
+done
+trap - EXIT
+
+wait $pid
+if [ $? == 1 ]; then
+    printf "\nRandom data extraction failed, test skipped.\n"
+    exit 1
+fi
+
+# Finish progress bar on successful extraction
+if [ -f rng.tmp ]; then
+    RNG_CURRENT_SIZE="$(wc -c <rng.tmp)"
+    progress ${RNG_CURRENT_SIZE} ${AMOUNT}
+    printf "\n"
+fi
+
+if ./test rng.tmp; then
+    printf "\n${GREEN}RNG OK${NC}\n"
+    printf "\nQuality of the random number generator doesn't show significant deficiency.\n"
+    printf "To ensure this quality holds and isn't coincidental, run this test multiple times.\n"
+else
+    printf "\n${RED}FATAL - quality of the random number generator is not sufficient!${NC}\n"
+    RNG_OUT_FILE="${OLDPWD}/rng_output_$(basename $DEV)_$(date +"%FT%T")"
+    mv rng.tmp $RNG_OUT_FILE
+    printf "\nThe random sample was saved into $(basename $RNG_OUT_FILE) for further inspection.\n"
+    printf "To ensure the quality holds and isn't coincidental, run this test multiple times.\n"
+    exit 1
+fi

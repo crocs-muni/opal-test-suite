@@ -1,0 +1,14 @@
+#!/bin/bash
+
+[ -z "$DISCOVERY_PATH" ] && DISCOVERY_PATH="opal-toolset"
+DISCOVERY=$DISCOVERY_PATH/discovery
+[ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+
+printf "Executing Discovery0...\n\n"
+
+$DISCOVERY $DEV 3 || { printf "\nDiscovery0 failed.\n" && exit 1; }
+
+printf "\nDone.\n"
+

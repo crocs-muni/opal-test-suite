@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -o pipefail
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+function get_discovery_var {
+    _size=$($DISCOVERY $DEV 3 | jq -r '."Discovery 0"."Geometry Feature".LogicalBlockSize')
+
+    [ $? -ne 0 ] &&
+        # TODO check for other source of LBA size
+        printf "\n${RED}Discovery0 failed, unable to continue!${NC}\n" && exit 1
+
+    printf $_size
+}
+
+# Update opal-toolset submodule
+printf "Updating opal-toolset ...\n"
+git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
+( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+
+[ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
+DISCOVERY=$OPAL_TOOLSET_PATH/discovery
+[ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+
+# Check if device exists
+lsblk $DEV 1>/dev/null || exit 1;
+
+D0=$($DISCOVERY $DEV 3)
+
+if ! echo $D0 | jq -e '."Discovery 0" | has("Opal SSC V2 Feature")' 1> /dev/null; then
+    printf "Opal 1 detected\n"
+fi
+
+if echo $D0 | jq -e '."Discovery 0"."Opal SSC V2 Feature" | has("Minor Version")' 1> /dev/null; then
+    MINOR_VERSION=$(echo $D0 | jq -e '."Discovery 0"."Opal SSC V2 Feature"."Minor Version"')
+    printf "Minor version $MINOR_VERSION detected, device supports Opal 2.0$MINOR_VERSION\n"
+    exit 0
+fi
+
+D2=$($DISCOVERY $DEV 5)

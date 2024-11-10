@@ -1,0 +1,28 @@
+#!/bin/bash
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Update opal-toolset submodule
+printf "Updating opal-toolset ...\n"
+git submodule update --init --remote --merge >/dev/null || { printf "\n${RED}ERROR: update of opal-toolset failed, test cancelled${NC}\n" && exit 1; }
+( cd opal-toolset && make >/dev/null 2>&1 ) || { printf "\n${RED}ERROR: build of opal-toolset failed, test cancelled${NC}\n" && exit 1; }
+echo
+
+# Load test parameters
+source .config
+[ "$DEV" = "unset" ] && printf "Configure test parameters in .config before running this test.\n" && exit 1
+
+# Test
+DEV=$DEV PIN=$PSID_HEX ./psid_reset || exit 1
+
+DEV=$DEV ADMIN_PIN=$ADMIN_PIN ./set_admin_pin || exit 1
+
+DEV=$DEV ADMIN_VERIFY_PIN=$ADMIN_PIN USER_ASSIGN_PIN=$USER_PIN ./set_locking_range || exit 1
+
+DEV=$DEV USER_VERIFY_PIN=$USER_PIN ./list_locking_range || exit 1
+
+DEV=$DEV ADMIN_VERIFY_PIN=$ADMIN_PIN ./regenerate_lr_key || exit 1
+
+printf "\n${GREEN}scenario_basic: all tests finished successfully${NC}\n"

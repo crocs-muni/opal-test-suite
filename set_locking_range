@@ -1,0 +1,31 @@
+#!/bin/bash
+
+[ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
+CONTROL=$CONTROL_PATH/control
+[ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+# Set parameters of the locking range.
+[ -z "$LR_START" ] && LR_START=0
+[ -z "$LR_LENGTH" ] && LR_LENGTH=512
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+[ -z "$ADMIN_VERIFY_PIN" ] && printf "WARNING: Variable ADMIN_VERIFY_PIN must be defined (admin pin in hexadecimal), test skipped.\n" && exit 1
+[ -z "$USER_ASSIGN_PIN" ] && printf "WARNING: Variable USER_ASSIGN_PIN must be defined (new user pin in hexadecimal), test skipped.\n" && exit 1
+
+printf "Setting up a new user with id 1...\n\n"
+$CONTROL -V setup_user $DEV			\
+	--verify-pin-hex=$ADMIN_VERIFY_PIN	\
+	--user 1				\
+	--assign-pin-hex=$USER_ASSIGN_PIN	\
+	|| { printf "\nSetting up a new user with id 1 failed.\n" && exit 1; }
+
+printf "\nSetting up a new locking range with id 1...\n\n"
+$CONTROL -V setup_range $DEV			\
+	--verify-pin-hex=$ADMIN_VERIFY_PIN	\
+	--locking-range 1			\
+	--locking-range-start $LR_START		\
+	--locking-range-length $LR_LENGTH	\
+	--user 1				\
+	|| { echo "\nSetting up a new locking range with id 1 failed.\n" && exit 1; }
+
+printf "\nDone.\n"

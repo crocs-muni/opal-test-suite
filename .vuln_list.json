@@ -1,0 +1,435 @@
+[
+    {
+        "id": "LENSE10256GMSP34MEAT2MA",
+        "vendor": "Lenovo AH6661",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "LENSE10512GMSP34MEAT2MA",
+        "vendor": "Lenovo AH6661",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "LENSE20256GMSP34MEAT2TA",
+        "vendor": "Lenovo AM6671",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version FW 2.8.8341 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "LENSE20512GMSP34MEAT2TA",
+        "vendor": "Lenovo AM6671",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version FW 2.8.8341 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "CA3-8D256",
+        "vendor": "LiteOn CA3",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version 24879 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "CA3-8D512",
+        "vendor": "LiteOn CA3",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version 24879 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "CV3-CE256",
+        "vendor": "LiteOn CV3",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "CV3-8D256",
+        "vendor": "LiteOn CV3",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "L8T-256L9G",
+        "vendor": "Lite-On L9G",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "LCS-256L9S",
+        "vendor": "Lite-On L9S",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "LGT-256M6G",
+        "vendor": "Lite-On M6G",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "LCS-256M6S",
+        "vendor": "Lite-On M6S",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "L8H-256V2G",
+        "vendor": "Lite-On V2G",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "LCH-256V2S",
+        "vendor": "Lite-On V2S",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "MTFDDAK2T0TBN",
+        "vendor": "Micron 1100",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version M0LN006 or use software encryption",
+        "note": null
+    },
+    {
+        "id": "MTFDDAK1T0TBN",
+        "vendor": "Micron 1100",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version M0LN006 or use software encryption",
+        "note": null
+    },
+    {
+        "id": "MTFDDAK256TBN",
+        "vendor": "Micron 1100",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "MTFDDAK512TBN",
+        "vendor": "Micron 1100",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "MTFDDAK256MBF",
+        "vendor": "Micron M600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "MTFDDAK1T0MBF",
+        "vendor": "Micron M600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD7TB6S256G1001",
+        "vendor": "SanDisk X300",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD7TB7S010T1001",
+        "vendor": "SanDisk X300",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD7TN6S256G1001",
+        "vendor": "SanDisk X300",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD7UB3Q256G1001",
+        "vendor": "SanDisk X300s",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD8TB8U256G1001",
+        "vendor": "SanDisk X400",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD8TB8U512G1001",
+        "vendor": "SanDisk X400",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD8TN8U256G1001",
+        "vendor": "SanDisk X400",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD8TN8U512G1001",
+        "vendor": "SanDisk X400",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD8TB8U1T001001",
+        "vendor": "SanDisk X400",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD9TB8W256G1001",
+        "vendor": "SanDisk X600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version X6117101 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD9TB8W512G1001",
+        "vendor": "SanDisk X600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version X6117101 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD9TB8W1T001001",
+        "vendor": "SanDisk X600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version X6117101 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD9TB8W2T001001",
+        "vendor": "SanDisk X600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version X6117101 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD9TN8W256G1001",
+        "vendor": "SanDisk X600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version X6117101 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "SD9TN8W512G1001",
+        "vendor": "SanDisk X600",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Update to firmware version X6117101 or later or use software encryption",
+        "note": null
+    },
+    {
+        "id": "HTS725050A7E635",
+        "vendor": "HGST Travel Star Jaguar C7",
+        "sources": [
+            {
+                "name": "Lenovo SA LEN-25256",
+                "link": "https://pcsupport.lenovo.com/us/pl/products/workstations/thinkstation-p-series-workstations/thinkstation-p520/product_security/ps500213-self-encrypting-drive-vulnerabilities"
+            }
+        ],
+        "mitigation": "Use software encryption",
+        "note": null
+    }
+]
+

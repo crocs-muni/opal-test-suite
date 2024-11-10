@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -o pipefail
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Update opal-toolset submodule
+printf "Updating opal-toolset ...\n"
+git submodule update --init --remote --merge >/dev/null
+( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue!${NC}\n" && exit 1; }
+
+[ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
+DISCOVERY=$OPAL_TOOLSET_PATH/discovery
+[ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+
+VULN_LIST_FILE=".vuln_list.json"
+# git update vuln_list
+
+UDEV_MODEL_ID=$(udevadm info $DEV | grep ID_MODEL | sed 's/^.*=//')
+[ $? -ne 0 ] && printf "\n${RED}Failed to obtain model information of $DEV, unable to continue!${NC}\n" && exit 1
+
+# Check presence in vulnerable list
+while read -r model_id; do
+    if [[ $UDEV_MODEL_ID =~ $model_id ]]; then
+        printf "\n${RED}FATAL - $DEV model with model ID $UDEV_MODEL_ID was identified as vulnerable!${NC}\n"
+        MITIGATION=$(jq -r --arg model_id $model_id  '.[] | select(.id == $model_id) | .mitigation' $VULN_LIST_FILE)
+        NOTE=$(jq -r --arg model_id $model_id  '.[] | select(.id == $model_id) | .note' $VULN_LIST_FILE)
+        LINK=$(jq -r --arg model_id $model_id  '.[] | select(.id == $model_id) | .sources[].link' $VULN_LIST_FILE)
+        [ -z $MITIGATON ] && printf "Mitigation: $MITIGATION\n"
+        [ -z $NOTE ] && printf "Note: $NOTE\n"
+        printf "Read more information at: $LINK\n"
+        exit 1
+    fi
+done < <(jq -r ".[].id" $VULN_LIST_FILE)
+
+printf "\n${GREEN}Vulnerable list check OK${NC}\n"
