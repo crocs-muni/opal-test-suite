@@ -1,0 +1,243 @@
+#!/bin/bash
+
+##################################### TMP; will be configured elsewhere
+PINA="00"
+USER=1
+PIN="111"
+LR=1
+PSID=75441852714292323769190347807230
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+#####################################
+
+START=32768   # random offset
+LENGTH=204800 # * 512 = 100 MiB
+PATTERN_BS=512
+BLOCK_PATTERN_SAMPLE_SIZE=4194304  # 4MiB
+
+RNG_TEST_BINARY=test_randomness
+
+
+function create_reference_images()
+{
+    touch 0_empty.img
+    sudo dd if=/dev/zero of=0_zero.img bs=$PATTERN_BS count=$LENGTH status=none
+    sudo dd if=/dev/zero               bs=$PATTERN_BS count=$LENGTH status=none | tr "\000" "\377" > 0_ones.img
+}
+
+function dd_write_ones()
+{
+    sudo dd if=0_ones.img of=$DEV bs=$PATTERN_BS seek=$START count=$LENGTH oflag=direct status=none
+}
+
+function dd_read_img()
+{
+    echo "IMG:$1"
+    sudo dd if=$DEV of=$1 bs=$PATTERN_BS skip=$START count=$LENGTH iflag=direct status=none
+}
+
+function compare_imgs()
+{
+    for f in $(ls *.img); do
+      sha256sum -b $f | tr -d '\n'
+      echo -n " "
+      cmp -s 0_empty.img $f && echo -n "[EMPTY]"
+      cmp -s 0_zero.img $f && echo -n "[ZERO]"
+      cmp -s 0_ones.img $f && echo -n "[ONES]"
+      echo
+    done
+}
+
+# TODO utilize existing scripts for toolset operations
+function create_images() {
+    ${OLDPWD}/utils/update_submodule || exit 1;
+
+    [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="${OLDPWD}/opal-toolset"
+    CONTROL=$OPAL_TOOLSET_PATH/control
+    [ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+    # Check if device exists.
+    lsblk $DEV 1>/dev/null || exit 1;
+
+    echo
+    echo "REVERT PSID"
+    sudo $CONTROL psid_revert $DEV --verify-pin=$PSID
+
+    create_reference_images
+    dd_write_ones
+    dd_read_img 1_clean.img
+
+    echo "ASSIGN PIN"
+    sudo $CONTROL setup_tper $DEV --assign-pin $PINA
+
+    echo "SET PIN"
+    sudo $CONTROL setup_user $DEV --user $USER --verify-pin $PINA --assign-pin $PIN
+
+    echo "LR DEF"
+    sudo $CONTROL setup_range $DEV --locking-range $LR --locking-range-start $START --locking-range-length $LENGTH --verify-pin $PINA --user $USER
+
+    echo "PRINT LR"
+    sudo $CONTROL list_range $DEV --locking-range $LR --user $USER --verify-pin $PIN
+
+    dd_read_img 2_lr1.img
+    dd_write_ones
+    dd_read_img 2_lr2.img
+
+    echo "LOCK LR"
+    sudo $CONTROL unlock $DEV --locking-range $LR --user $USER --verify-pin $PIN --read-locked 1 --write-locked 1
+    sudo $CONTROL list_range $DEV --locking-range $LR --user $USER --verify-pin $PIN
+
+    echo "UNLOCK LR"
+    sudo $CONTROL unlock $DEV --locking-range $LR --user $USER --verify-pin $PIN --read-locked 0 --write-locked 0
+    sudo $CONTROL list_range $DEV --locking-range $LR --user $USER --verify-pin $PIN
+
+    dd_read_img 4_lr1_unlocked.img
+
+    echo "REGENERATE KEY"
+    sudo $CONTROL regenerate_key $DEV --locking-range $LR --verify-pin $PINA
+    dd_read_img 5_lr1_unlocked.img
+
+    echo "REGENERATE KEY"
+    sudo $CONTROL regenerate_key $DEV --locking-range $LR --verify-pin $PINA
+    dd_read_img 5_lr2_unlocked.img
+
+    echo "REGENERATE KEY"
+    sudo $CONTROL regenerate_key $DEV --locking-range $LR --verify-pin $PINA
+    dd_read_img 5_lr3_unlocked.img
+
+    compare_imgs
+}
+
+function test_pattern()
+{
+    # Calculate SHA256 for each sector.
+    i=0
+    off=0
+
+    while (test $off -lt $BLOCK_PATTERN_SAMPLE_SIZE); do
+        dd if=$1 bs=$2 count=1 skip=$i status=none | sha256sum >>SUMS
+        off=$((off + $2))
+        i=$((i + 1))
+    done
+
+    # Check for duplicity.
+    sort SUMS >SUMS_sorted
+    {
+        read -r line
+        _prev_line=$line
+
+        while read -r line
+        do
+            [ "$line" == "$_prev_line" ] && return 1;
+            _prev_line=$line
+        done
+    } < SUMS_sorted
+
+    return 0
+}
+
+function test_in_workdir()
+{
+    gcc -std=c99 -DTOTAL_BYTES=104857600 -o $RNG_TEST_BINARY ${OLDPWD}/source/chi_squared_test.c \
+    || { printf "\nBuild of testing program failed, test skipped.\n" && return 1; }
+
+    echo ${TEST_REKEY_PATTERN_IMG}
+    if [ -z $TEST_REKEY_PATTERN_IMG ]; then
+        create_images 2>&1
+        TEST_REKEY_PATTERN_IMG="5_lr3_unlocked.img"
+    else
+        TEST_REKEY_PATTERN_IMG="${OLDPWD}/${TEST_REKEY_PATTERN_IMG}"
+    fi
+
+    [ ! -f $TEST_REKEY_PATTERN_IMG ] && printf "Image file $TEST_REKEY_PATTERN_IMG not found.\n" && return 1
+
+    # Test if disk wipes the LR after key change.
+    cmp -s 0_zero.img $TEST_REKEY_PATTERN_IMG \
+        && printf "Data is wiped after key change, test inapplicable.\n" && return 0
+
+    if ./"${RNG_TEST_BINARY}" $TEST_REKEY_PATTERN_IMG; then
+        printf "\n${GREEN}OK - encryption pattern not detected${NC}\n"
+        rm $RNG_TEST_BINARY
+        return 0
+    else
+        rm $RNG_TEST_BINARY
+        printf "\n${RED}FATAL - encryption pattern detected${NC}\n"
+    fi
+
+    echo
+    echo Continuing with $PATTERN_BS-byte pattern test ...
+
+    if [ ! -z $DEV ]; then
+        IOCTL_LBAFS=$(blockdev --getss $DEV)
+        [ $IOCTL_LBAFS != $PATTERN_BS ] \
+            && printf "WARNING: testing pattern of block size which is not currently used on drive\n"
+    fi
+
+    test_pattern $TEST_REKEY_PATTERN_IMG $PATTERN_BS &
+    pid=$!
+    trap "kill $pid 2> /dev/null" EXIT
+
+    # Wait for SUMS file to be created.
+    while [ ! -f SUMS ] && kill -0 $pid 2> /dev/null; do
+        sleep 0.5
+    done
+
+    # Draw progress.
+    local SUMS_EXPECTED_SIZE=$(( $BLOCK_PATTERN_SAMPLE_SIZE / $PATTERN_BS ))
+    local SUMS_CURRENT_SIZE=0
+    while [ $SUMS_CURRENT_SIZE -lt $SUMS_EXPECTED_SIZE ]; do
+        SUMS_CURRENT_SIZE="$(wc -l <SUMS)"
+        ${OLDPWD}/utils/progress ${SUMS_CURRENT_SIZE} $SUMS_EXPECTED_SIZE
+        sleep .2
+    done
+    trap - EXIT
+
+    # Finish progress bar.
+    SUMS_CURRENT_SIZE="$(wc -l <SUMS)"
+    ${OLDPWD}/utils/progress ${SUMS_CURRENT_SIZE} $SUMS_EXPECTED_SIZE
+    printf "\n"
+
+    wait $pid
+    if [ $? == 1 ]; then
+        printf "\n${RED}$PATTERN_BS-byte pattern found; disk utilizes faulty encryption implementation.${NC}\n"
+        return 1
+    else
+        printf "\n$PATTERN_BS-byte pattern not found; try a different block size.\n"
+    fi
+}
+
+
+[ $# -gt 2 ] && printf "Invalid arguments given, use -h for help.\n" && exit 1
+[ $# -eq 2 ] && { PATTERN_BS=$2; TEST_REKEY_PATTERN_IMG=$1; }
+[ $# -eq 0 ] && [ -z $DEV ] \
+    && printf "WARNING: Variable DEV must be defined (partition or block device).\nUse -h for help. Test skipped.\n" && exit 1
+
+[ $# -eq 1 ] && {
+    if [ $1 == "-h" ]; then
+        printf "help\n"
+        exit 0
+    fi
+
+    if [ ! -z $DEV ]; then
+        PATTERN_BS=$1
+    else
+        TEST_REKEY_PATTERN_IMG=$1
+    fi
+}
+
+[ -z $KEEP_LOGDIR ] && KEEP_LOGDIR=true
+
+[ ! $PATTERN_BS -eq 512 ] && [ ! $PATTERN_BS -eq 4096 ] \
+    && printf "WARNING: Pattern block size of $PATTERN_BS not supported. Test skipped.\n" && exit 1
+
+WORKDIR=log_test_rekey_pattern_$(date "+%F_%T")
+mkdir $WORKDIR || { printf "\nUnexpected error occurred, test skipped.\n" && exit 1; }
+cd $WORKDIR
+
+test_in_workdir
+RETVAL=$?
+
+[ -z "$(ls -A $PWD)" -o $KEEP_LOGDIR == false ] && cd $OLDPWD && rm -rf $WORKDIR
+exit $RETVAL
