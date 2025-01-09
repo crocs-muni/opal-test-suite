@@ -1,0 +1,9 @@
+#!/bin/bash
+
+printf "Updating opal-toolset ...\n"
+
+git submodule update --init --remote --merge >/dev/null \
+    || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
+
+( cd ../opal-toolset && make >/dev/null ) \
+    || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
