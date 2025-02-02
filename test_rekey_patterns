@@ -40,7 +40,7 @@ function dd_read_img()
 
 function compare_imgs()
 {
-    sha256sum --v >/dev/null || return 1
+    command -v sha256sum >/dev/null || return 1
 
     for f in $(ls *.img); do
       sha256sum -b $f | tr -d '\n'
@@ -135,7 +135,6 @@ function test_in_workdir()
     gcc -std=c99 -DTOTAL_BYTES=104857600 -o $RNG_TEST_BINARY ${OLDPWD}/source/chi_squared_test.c \
     || { printf "\nBuild of testing program failed, test skipped.\n" && return 1; }
 
-    echo ${TEST_REKEY_PATTERN_IMG}
     if [ -z $TEST_REKEY_PATTERN_IMG ]; then
         create_images 2>&1
         TEST_REKEY_PATTERN_IMG="5_lr3_unlocked.img"
@@ -167,7 +166,7 @@ function test_in_workdir()
             && printf "WARNING: testing pattern of block size which is not currently used on drive\n"
     fi
 
-    sha256sum --v >/dev/null || exit 1
+    command -v sha256sum >/dev/null || exit 1
     test_pattern $TEST_REKEY_PATTERN_IMG $PATTERN_BS &
     pid=$!
     trap "kill $pid 2> /dev/null" EXIT
@@ -225,8 +224,8 @@ function test_in_workdir()
 [ ! $PATTERN_BS -eq 512 ] && [ ! $PATTERN_BS -eq 4096 ] \
     && printf "WARNING: Pattern block size of $PATTERN_BS not supported. Test skipped.\n" && exit 1
 
-sha256sum --v >/dev/null || printf "\n${RED}WARNING: sha256sum command not available, results might be incomplete, install and rerun to enable full functionality${NC}\n\n"
-tr --v >/dev/null || { printf "\n${RED}tr command not available, install and rerun this test${NC}\n" && exit 1; }
+command -v sha256sum >/dev/null || printf "\n${RED}WARNING: sha256sum command not available, results might be incomplete, install and rerun to enable full functionality${NC}\n\n"
+command -v tr >/dev/null || { printf "\n${RED}tr command not available, install and rerun this test${NC}\n" && exit 1; }
 
 WORKDIR=log_test_rekey_pattern_$(date "+%F_%T")
 mkdir $WORKDIR || { printf "\nUnexpected error occurred, test skipped.\n" && exit 1; }
