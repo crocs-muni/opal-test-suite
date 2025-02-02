@@ -1,11 +1,11 @@
 #!/bin/bash
 
 ##################################### TMP; will be configured elsewhere
-PINA="00"
+PINA="0000"
 USER=1
-PIN="111"
+PIN="1111"
 LR=1
-PSID=75441852714292323769190347807230
+PSID=3735343431383532373134323932333233373639313930333437383037323330
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -40,6 +40,8 @@ function dd_read_img()
 
 function compare_imgs()
 {
+    sha256sum --v >/dev/null || return 1
+
     for f in $(ls *.img); do
       sha256sum -b $f | tr -d '\n'
       echo -n " "
@@ -50,62 +52,52 @@ function compare_imgs()
     done
 }
 
-# TODO utilize existing scripts for toolset operations
 function create_images() {
     ${OLDPWD}/utils/update_submodule || exit 1;
 
-    [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="${OLDPWD}/opal-toolset"
-    CONTROL=$OPAL_TOOLSET_PATH/control
-    [ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+    [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH=${OLDPWD}/opal-toolset
 
-    # Check if device exists.
+    # Check if device exists
     lsblk $DEV 1>/dev/null || exit 1;
 
-    echo
-    echo "REVERT PSID"
-    sudo $CONTROL psid_revert $DEV --verify-pin=$PSID
+    # PSID reset
+    DEV=$DEV PIN=$PSID CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/psid_reset || exit 1
 
     create_reference_images
     dd_write_ones
     dd_read_img 1_clean.img
 
-    echo "ASSIGN PIN"
-    sudo $CONTROL setup_tper $DEV --assign-pin $PINA
+    # Create admin
+    DEV=$DEV ADMIN_PIN=$PINA CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/set_admin_pin || exit 1
 
-    echo "SET PIN"
-    sudo $CONTROL setup_user $DEV --user $USER --verify-pin $PINA --assign-pin $PIN
+    # Create user and a locking range
+    DEV=$DEV ADMIN_VERIFY_PIN=$PINA USER_ASSIGN_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH \
+    LR_START=$START LR_LENGTH=$LENGTH ${OLDPWD}/set_locking_range || exit 1
 
-    echo "LR DEF"
-    sudo $CONTROL setup_range $DEV --locking-range $LR --locking-range-start $START --locking-range-length $LENGTH --verify-pin $PINA --user $USER
-
-    echo "PRINT LR"
-    sudo $CONTROL list_range $DEV --locking-range $LR --user $USER --verify-pin $PIN
+    # List the locking range
+    DEV=$DEV USER_VERIFY_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range || exit 1
 
     dd_read_img 2_lr1.img
     dd_write_ones
     dd_read_img 2_lr2.img
 
-    echo "LOCK LR"
-    sudo $CONTROL unlock $DEV --locking-range $LR --user $USER --verify-pin $PIN --read-locked 1 --write-locked 1
-    sudo $CONTROL list_range $DEV --locking-range $LR --user $USER --verify-pin $PIN
+    # Lock and list the locking range
+    DEV=$DEV PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/lock_lr || exit 1
+    DEV=$DEV USER_VERIFY_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range || exit 1
 
-    echo "UNLOCK LR"
-    sudo $CONTROL unlock $DEV --locking-range $LR --user $USER --verify-pin $PIN --read-locked 0 --write-locked 0
-    sudo $CONTROL list_range $DEV --locking-range $LR --user $USER --verify-pin $PIN
+    # Unlock and list the locking range
+    DEV=$DEV PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/unlock_lr || exit 1
+    DEV=$DEV USER_VERIFY_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range || exit 1
 
     dd_read_img 4_lr1_unlocked.img
 
-    echo "REGENERATE KEY"
-    sudo $CONTROL regenerate_key $DEV --locking-range $LR --verify-pin $PINA
-    dd_read_img 5_lr1_unlocked.img
+    # Regenerate encryption key
+    DEV=$DEV ADMIN_VERIFY_PIN=$PINA CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/regenerate_lr_key || exit 1
 
-    echo "REGENERATE KEY"
-    sudo $CONTROL regenerate_key $DEV --locking-range $LR --verify-pin $PINA
-    dd_read_img 5_lr2_unlocked.img
-
-    echo "REGENERATE KEY"
-    sudo $CONTROL regenerate_key $DEV --locking-range $LR --verify-pin $PINA
     dd_read_img 5_lr3_unlocked.img
+
+    # PSID reset
+    DEV=$DEV PIN=$PSID CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/psid_reset || exit 1
 
     compare_imgs
 }
@@ -153,7 +145,7 @@ function test_in_workdir()
 
     [ ! -f $TEST_REKEY_PATTERN_IMG ] && printf "Image file $TEST_REKEY_PATTERN_IMG not found.\n" && return 1
 
-    # Test if disk wipes the LR after key change.
+    # Test if disk wipes the LR after key change
     cmp -s 0_zero.img $TEST_REKEY_PATTERN_IMG \
         && printf "Data is wiped after key change, test inapplicable.\n" && return 0
 
@@ -175,16 +167,17 @@ function test_in_workdir()
             && printf "WARNING: testing pattern of block size which is not currently used on drive\n"
     fi
 
+    sha256sum --v >/dev/null || exit 1
     test_pattern $TEST_REKEY_PATTERN_IMG $PATTERN_BS &
     pid=$!
     trap "kill $pid 2> /dev/null" EXIT
 
-    # Wait for SUMS file to be created.
+    # Wait for SUMS file to be created
     while [ ! -f SUMS ] && kill -0 $pid 2> /dev/null; do
         sleep 0.5
     done
 
-    # Draw progress.
+    # Draw progress
     local SUMS_EXPECTED_SIZE=$(( $BLOCK_PATTERN_SAMPLE_SIZE / $PATTERN_BS ))
     local SUMS_CURRENT_SIZE=0
     while [ $SUMS_CURRENT_SIZE -lt $SUMS_EXPECTED_SIZE ]; do
@@ -194,7 +187,7 @@ function test_in_workdir()
     done
     trap - EXIT
 
-    # Finish progress bar.
+    # Finish progress bar
     SUMS_CURRENT_SIZE="$(wc -l <SUMS)"
     ${OLDPWD}/utils/progress ${SUMS_CURRENT_SIZE} $SUMS_EXPECTED_SIZE
     printf "\n"
@@ -231,6 +224,9 @@ function test_in_workdir()
 
 [ ! $PATTERN_BS -eq 512 ] && [ ! $PATTERN_BS -eq 4096 ] \
     && printf "WARNING: Pattern block size of $PATTERN_BS not supported. Test skipped.\n" && exit 1
+
+sha256sum --v >/dev/null || printf "\n${RED}WARNING: sha256sum command not available, results might be incomplete, install and rerun to enable full functionality${NC}\n\n"
+tr --v >/dev/null || { printf "\n${RED}tr command not available, install and rerun this test${NC}\n" && exit 1; }
 
 WORKDIR=log_test_rekey_pattern_$(date "+%F_%T")
 mkdir $WORKDIR || { printf "\nUnexpected error occurred, test skipped.\n" && exit 1; }
