@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Set path to the control tool.
+[ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
+CONTROL=$CONTROL_PATH/control
+[ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+[ -z "$PIN" ] && printf "WARNING: Variable PIN must be defined (PSID in hexadecimal), test skipped.\n" && exit 1
+
+[ -z "$LR_ID" ] && LR_ID=1
+[ -z "$USER_ID" ] && USER_ID=1
+
+printf "Locking locking range (id $LR_ID)...\n\n"
+
+$CONTROL -V unlock $DEV \
+    --locking-range $LR_ID \
+    --user $USER_ID \
+    --verify-pin-hex $PIN \
+    --read-locked 1 \
+    --write-locked 1 \
+    || { printf "\nFailed to lock the locking range.\n" && exit 1; }
+
+printf "\nDone.\n"
