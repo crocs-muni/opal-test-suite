@@ -1,0 +1,170 @@
+#!/bin/bash
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+FEATURE_TPER=false
+FEATURE_LOCKING=false
+FEATURE_OPAL=false
+FEATURE_PYRITE=false
+FEATURE_SINGLE_USER_MODE=false
+
+function get_discovery0_value ()
+{
+    [ -z $DISCOVERY_HOLDER ] && return 1
+    local _discovery='"Discovery 0"'
+
+    local _value=$(jq -r ".${_discovery}.${1}.${2}" $DISCOVERY_HOLDER)
+
+    [ $? -ne 0 ] && printf "${RED}WARNING: unable to obtain ${2}${NC}\n" && return 1
+
+    printf "$_value"
+}
+
+function get_identify_value ()
+{
+    [ -z $DISCOVERY_HOLDER ] && return 1
+
+    local _value=$(jq -r ".Identify.${1}" $DISCOVERY_HOLDER)
+
+    [ $? -ne 0 ] && printf "${RED}WARNING: unable to obtain ${1}${NC}\n" && return 1
+
+    printf "${GREEN}${_value}${NC}"
+}
+
+# TODO when #3 is merged
+#utils/update_submodule || exit 1
+
+# Update opal-toolset submodule
+git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
+( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+
+[ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
+DISCOVERY=$OPAL_TOOLSET_PATH/discovery
+[ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+
+command -v jq >/dev/null || { printf "${RED}jq command not installed; install and rerun to continue${NC}\n" && exit 1; }
+
+# Check if device exists
+[[ -e $DEV ]] || { printf "${RED}$DEV not found${NC}\n" && exit 1; }
+
+# TODO handle failure
+DISCOVERY_HOLDER="$(mktemp -q)"
+
+$DISCOVERY $DEV 3 > $DISCOVERY_HOLDER || { printf "${RED}Discovery0 failed; test skipped${NC}\n" && exit 1; }
+
+printf "|     DRIVE INFORMATION     |\n"
+
+printf "device file: ${GREEN}${DEV}${NC}\n"
+echo "model number: $(get_identify_value '"Model number"')"
+echo "serial number: $(get_identify_value '"Serial number"')"
+echo "firmware version: $(get_identify_value '"Firmware version"')"
+echo "logical block size  (bytes): $(get_identify_value '"Logical block bytes"')"
+echo "physical block size (bytes): $(get_identify_value '"Physical block bytes"')"
+
+features=()
+
+while read -r feature; do
+    case $feature in
+        "TPer Feature")
+            FEATURE_TPER=true
+            features+=("$feature")
+            ;;
+
+        "Locking Feature")
+            FEATURE_LOCKING=true
+            features+=("$feature")
+            MEDIA_ENCRYPTION=$(get_discovery0_value '"Locking Feature"' '"Media Encryption"')
+            MBR_SHADOWING=$(get_discovery0_value '"Locking Feature"' '"MBR Shadowing Not Supported"')
+            ;;
+
+        "Opal SSC V2 Feature")
+            FEATURE_OPAL=true
+            features+=("$feature")
+            OPAL_MINOR_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"SSC Minor Version Number"')
+            ;;
+
+        "Pyrite SSC Feature")
+            FEATURE_PYRITE=true
+            features+=("$feature")
+            ;;
+
+        "Single User Mode Feature")
+            FEATURE_SINGLE_USER_MODE=true
+            features+=("$feature")
+            ;;
+
+        "Supported Data Removal Mechanism Feature")
+            DATA_REMOVAL_MECHANISM=$(get_discovery0_value '"Supported Data Removal Mechanism Feature"' '"Supported Data Removal Mechanism"')
+            ;;
+        
+        "Revision")
+            ;;
+
+        *)
+            features+=("$feature")
+            ;;
+    esac  
+done < <(jq -r '."Discovery 0" | keys[]' $DISCOVERY_HOLDER)
+
+[ $FEATURE_LOCKING == false ] && printf "${RED}[TCG violation] mandatory Locking Feature not detected\n"
+[ $FEATURE_TPER == false ] && printf "${RED}[TCG violation] mandatory TPer Feature not detected\n"
+
+echo
+# TODO other SSCs
+[ $FEATURE_OPAL == true ] && printf "SSC: ${GREEN}Opal${NC}\n"
+[ $FEATURE_PYRITE == true ] && printf "SSC: ${GREEN}Pyrite${NC}\n"
+
+# TODO write test to try minor version detection
+if [ "$OPAL_MINOR_VERSION" == "2" ]; then
+    printf "SSC version: ${GREEN}2.02${NC}\n"
+else
+    printf "SSC version: ${RED}2.0X${NC} (minor version not detectable)\n"
+fi
+# TODO add Pyrite SSC version info
+
+if [ "$MEDIA_ENCRYPTION" == "1" ]; then
+    printf "hardware encryption: ${GREEN}enabled${NC}\n"
+elif [ "$MEDIA_ENCRYPTION" == "0" ]; then
+    printf "hardware encryption: ${RED}unavailable${NC}\n"
+else
+    printf "${RED}[TCG violation] unable to obtain information on hardware encryption${NC}\n"
+fi
+
+if $FEATURE_SINGLE_USER_MODE; then
+    printf "single user mode: ${GREEN}supported${NC}\n"
+else
+    printf "single user mode: ${RED}not supported${NC}\n"
+fi
+
+# TODO rewrite into case statement
+if [ "$DATA_REMOVAL_MECHANISM" == "1" ]; then
+    printf "data removal mechanism: ${GREEN}Overwrite Data Erase${NC}\n"
+elif [ "$DATA_REMOVAL_MECHANISM" == "2" ]; then
+    printf "data removal mechanism: ${GREEN}Block Erase${NC}\n"
+elif [ "$DATA_REMOVAL_MECHANISM" == "4" ]; then
+    printf "data removal mechanism: ${GREEN}Cryptographic Erase${NC}\n"
+elif [ "$DATA_REMOVAL_MECHANISM" == "32" ]; then
+    printf "data removal mechanism: ${GREEN}Vendor Specific Erase${NC}\n"
+else
+    printf "data removal mechanism: ${RED}unspecified${NC}\n"
+fi
+
+if [ "$MBR_SHADOWING" == "0" ]; then
+    printf "MBR shadowing: ${GREEN}supported${NC}\n"
+else
+    printf "MBR shadowing: ${RED}not supported${NC}\n"
+fi
+
+[ $FEATURE_OPAL == true -a $MEDIA_ENCRYPTION == "0" ] && printf "${RED}[TCG violation] drive implements Opal but does not provide hardware encryption${NC}\n"
+[ $FEATURE_PYRITE == true -a $MEDIA_ENCRYPTION == "1" ] && printf "${RED}[TCG violation] drive implements Pyrite but claims hardware encryption${NC}\n"
+
+echo
+printf "All detected features:\n"
+for f in "${features[@]}"; do
+    printf "    $f"
+    printf "\n"
+done
