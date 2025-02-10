@@ -1,3 +1,6 @@
 [submodule "opal-toolset"]
 	path = opal-toolset
 	url = https://github.com/crocs-muni/opal-toolset
+[submodule "tcg-storage-tools"]
+	path = tcg-storage-tools
+	url = https://github.com/mbroz/tcg-storage-tools
