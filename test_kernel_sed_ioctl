@@ -1,0 +1,22 @@
+#!/bin/bash
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+TCG_STORAGE_TOOLS="tcg-storage-tools"
+TEST_BINARY="discovery"
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped\n" && exit 1
+
+# Update tcg-storage-tools submodule
+git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
+( cd tcg-storage-tools && make >/dev/null ) || { printf "\n${RED}Build of tcg-storage-tools failed, unable to continue${NC}\n" && exit 1; }
+
+# Test if discovery via sed-ioctl runs without errors
+if ${TCG_STORAGE_TOOLS}/${TEST_BINARY} $DEV 1>/dev/null; then
+    printf "\n${GREEN}kernel SED ioctl OK${NC}\n"
+else
+    printf "\n${RED}kernel SED ioctl not working${NC}\n"
+    exit 1
+fi
