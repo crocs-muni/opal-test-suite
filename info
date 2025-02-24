@@ -10,6 +10,31 @@ FEATURE_OPAL=false
 FEATURE_PYRITE=false
 FEATURE_SINGLE_USER_MODE=false
 
+OUT_JSON=true
+OUT_JSON_FILE="info.json"
+TEST_FILE=false
+
+function json_report ()
+{
+    if ! $OUT_JSON; then return 0; fi
+
+    echo "$(jq ". += {\"${1}\": \"${2}\"}" $OUT_JSON_FILE)" > $OUT_JSON_FILE
+}
+
+function json_init_array ()
+{
+    if ! $OUT_JSON; then return 0; fi
+
+    echo "$(jq ". += {\"${1}\": []}" $OUT_JSON_FILE)" > $OUT_JSON_FILE
+}
+
+function json_append_array ()
+{
+    if ! $OUT_JSON; then return 0; fi
+
+    echo "$(jq ".\"${1}\" += [\"${2}\"]" $OUT_JSON_FILE)" > $OUT_JSON_FILE
+}
+
 function get_discovery0_value ()
 {
     [ -z $DISCOVERY_HOLDER ] && return 1
@@ -17,7 +42,7 @@ function get_discovery0_value ()
 
     local _value=$(jq -r ".${_discovery}.${1}.${2}" $DISCOVERY_HOLDER)
 
-    [ $? -ne 0 ] && printf "${RED}WARNING: unable to obtain ${2}${NC}\n" && return 1
+    [ $? -ne 0 ] && printf "$WARNING: unable to obtain ${2}\n" && return 1
 
     printf "$_value"
 }
@@ -28,15 +53,14 @@ function get_identify_value ()
 
     local _value=$(jq -r ".Identify.${1}" $DISCOVERY_HOLDER)
 
-    [ $? -ne 0 ] && printf "${RED}WARNING: unable to obtain ${1}${NC}\n" && return 1
+    [ $? -ne 0 ] && printf "WARNING: unable to obtain ${1}\n" && return 1
 
-    printf "${GREEN}${_value}${NC}"
+    printf "${_value}"
 }
 
 # TODO when #3 is merged
 #utils/update_submodule || exit 1
 
-# Update opal-toolset submodule
 git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
 ( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
 
@@ -44,26 +68,77 @@ git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submo
 DISCOVERY=$OPAL_TOOLSET_PATH/discovery
 [ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
 
-[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+[ -z "$DEV" ] && [ $# -eq 0 ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
 
 command -v jq >/dev/null || { printf "${RED}jq command not installed; install and rerun to continue${NC}\n" && exit 1; }
+command -v nvme >/dev/null || printf "${RED}nvme command not installed; install and rerun for full test output${NC}\n"
+command -v lsblk >/dev/null || printf "${RED}lsblk command not installed; install and rerun for full test output${NC}\n"
 
-# Check if device exists
-[[ -e $DEV ]] || { printf "${RED}$DEV not found${NC}\n" && exit 1; }
+[ ! -z "$DEV" ] && [[ ! -e $DEV ]] && { printf "${RED}$DEV not found${NC}\n" && exit 1; }
 
-# TODO handle failure
-DISCOVERY_HOLDER="$(mktemp -q)"
+if [ $# -eq 1 ]; then
+    TEST_FILE=true
+    DISCOVERY_HOLDER=$1
+    [ ! -f $DISCOVERY_HOLDER ] && { printf "${DISCOVERY_HOLDER}: no such file\n" && exit 1; }
+else
+    DISCOVERY_HOLDER="$(mktemp -q)"
+    [ $? -ne 0 ] && { printf "${RED}[ERROR] could not create file${NC}\n" && exit 1; }
 
-$DISCOVERY $DEV 3 > $DISCOVERY_HOLDER || { printf "${RED}Discovery0 failed; test skipped${NC}\n" && exit 1; }
+    $DISCOVERY $DEV 3 > $DISCOVERY_HOLDER || { printf "${RED}Discovery0 failed; test skipped${NC}\n" && exit 1; }
+fi
 
-printf "|     DRIVE INFORMATION     |\n"
+if [ $OUT_JSON == "true" ]; then
+    echo "{\"timestamp\": \"$(date +%d/%m/%y-%T)\"}" > $OUT_JSON_FILE
+    json_init_array "features"
+    json_init_array "TCG violation"
+fi
 
-printf "device file: ${GREEN}${DEV}${NC}\n"
-echo "model number: $(get_identify_value '"Model number"')"
-echo "serial number: $(get_identify_value '"Serial number"')"
-echo "firmware version: $(get_identify_value '"Firmware version"')"
-echo "logical block size  (bytes): $(get_identify_value '"Logical block bytes"')"
-echo "physical block size (bytes): $(get_identify_value '"Physical block bytes"')"
+printf "|     DRIVE INFORMATION     |\n\n"
+[ $TEST_FILE == "true" ] && printf "SOURCE: ${DISCOVERY_HOLDER}\n\n"
+
+[ $TEST_FILE == "false" ] && printf "device file: ${DEV}\n"
+[ $TEST_FILE == "false" ] && json_report "device file" "${DEV}"
+
+if command -v lsblk >/dev/null && [ $TEST_FILE == "false" ]; then
+    VALUE_RM=$(lsblk --noheadings --nodeps --paths --raw --output RM $DEV)
+    VALUE_TRAN=$(lsblk --noheadings --nodeps --paths --raw --output TRAN $DEV)
+    VALUE_TYPE=$(lsblk --noheadings --nodeps --paths --raw --output TYPE $DEV)
+    printf "drive connection <removability> <transport type> <type>: ${VALUE_RM} ${VALUE_TRAN} ${VALUE_TYPE}\n"
+    json_report "drive transport type" "$VALUE_TRAN"
+    json_report "drive removability" "$VALUE_RM"
+    [ "$VALUE_RM" == "1" -a "$VALUE_TRAN" == "usb" -a $VALUE_TYPE == "disk" ] \
+        && printf "\n[WARNING] kernel sed-ioctl may not work with this drive, the USB connector may not process essential communication; in such case, you can still handle the drive with opal-toolset methods\n"
+fi
+
+VALUE=$(get_identify_value '"Model number"')
+printf "model number: $VALUE\n"
+json_report "model number" "$VALUE"
+
+VALUE=$(get_identify_value '"Serial number"')
+printf "serial number: $VALUE\n"
+json_report "serial number" "$VALUE"
+
+VALUE=$(get_identify_value '"Firmware version"')
+printf "firmware version: $VALUE\n"
+json_report "firmware version" "$VALUE"
+
+VALUE=$(get_identify_value '"Logical block bytes"')
+printf "logical block size  (bytes): $VALUE\n"
+json_report "logical block size (bytes)" "$VALUE"
+
+VALUE=$(get_identify_value '"Physical block bytes"')
+printf "physical block size (bytes): $VALUE\n"
+json_report "physical block size (bytes)" "$VALUE"
+
+if [ $TEST_FILE == "false" ] && command -v nvme >/dev/null && command -v lsblk >/dev/null && [ "$VALUE_TRAN" == "nvme" ]; then
+    printf "NVMe profiles:\n"
+    json_init_array "NVMe profiles"
+
+    while read -r profile; do
+        printf "    $profile\n"
+        json_append_array "NVMe profiles" "$profile"
+    done < <(sudo nvme id-ns $DEV -H | grep "Metadata Size:")
+fi
 
 features=()
 
@@ -81,17 +156,6 @@ while read -r feature; do
             MBR_SHADOWING=$(get_discovery0_value '"Locking Feature"' '"MBR Shadowing Not Supported"')
             ;;
 
-        "Opal SSC V2 Feature")
-            FEATURE_OPAL=true
-            features+=("$feature")
-            OPAL_MINOR_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"SSC Minor Version Number"')
-            ;;
-
-        "Pyrite SSC Feature")
-            FEATURE_PYRITE=true
-            features+=("$feature")
-            ;;
-
         "Single User Mode Feature")
             FEATURE_SINGLE_USER_MODE=true
             features+=("$feature")
@@ -107,64 +171,141 @@ while read -r feature; do
         *)
             features+=("$feature")
             ;;
-    esac  
+    esac
+
+    [[ "$feature" =~ "Opal" ]] && {
+
+        if [ "$FEATURE_OPAL" == "false" -o "$OPAL_VERSION" != "2" ]; then
+            if [ "$feature" == "Opal SSC V2 Feature" ]; then
+                OPAL_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"SSC Minor Version Number"')
+            elif [ "$feature" == "Opal SSC Feature" ]; then
+                OPAL_VERSION="1.0"
+            else
+                OPAL_VERSION="unknown"
+            fi
+        fi
+
+        FEATURE_OPAL=true
+    }
+
+    [[ "$feature" =~ "Pyrite" ]] && {
+
+        if [ "$FEATURE_PYRITE" == "false" -o "$PYRITE_VERSION" != "2.0X" ]; then
+            if [ "$feature" == "Pyrite SSC V2.00 Feature" ]; then
+                PYRITE_VERSION="2.0X"
+            elif [ "$feature" == "Pyrite SSC Feature" ]; then
+                PYRITE_VERSION="1.0"
+            else
+                PYRITE_VERSION="unknown"
+            fi
+        fi
+
+        FEATURE_PYRITE=true
+    }
 done < <(jq -r '."Discovery 0" | keys[]' $DISCOVERY_HOLDER)
 
-[ $FEATURE_LOCKING == false ] && printf "${RED}[TCG violation] mandatory Locking Feature not detected\n"
-[ $FEATURE_TPER == false ] && printf "${RED}[TCG violation] mandatory TPer Feature not detected\n"
+if [ $FEATURE_LOCKING == false ]; then
+    printf "[TCG violation] mandatory Locking Feature not detected\n"
+    json_append_array "TCG violation" "mandatory Locking Feature not detected"
+fi
+
+if [ $FEATURE_TPER == false ]; then
+    printf "[TCG violation] mandatory TPer Feature not detected\n"
+    json_append_array "TCG violation" "mandatory TPer Feature not detected"
+fi
 
 echo
 # TODO other SSCs
-[ $FEATURE_OPAL == true ] && printf "SSC: ${GREEN}Opal${NC}\n"
-[ $FEATURE_PYRITE == true ] && printf "SSC: ${GREEN}Pyrite${NC}\n"
+[ $FEATURE_OPAL == true ] && printf "SSC: Opal\n"
+[ $FEATURE_PYRITE == true ] && printf "SSC: Pyrite\n"
 
-# TODO write test to try minor version detection
-if [ "$OPAL_MINOR_VERSION" == "2" ]; then
-    printf "SSC version: ${GREEN}2.02${NC}\n"
-else
-    printf "SSC version: ${RED}2.0X${NC} (minor version not detectable)\n"
+# TODO write test to try proper minor version detection
+if [ $FEATURE_OPAL == "true" ]; then
+    if [ "$OPAL_VERSION" == "2" ]; then
+        printf "SSC version: 2.02\n"
+        json_report "SSC version" "2.02"
+    elif [ "$OPAL_VERSION" == "30" ]; then
+        printf "SSC version: 2.30\n"
+        json_report "SSC version" "2.30"
+    elif [ "$OPAL_VERSION" == "unknown" ]; then
+        printf "[TCG violation] unknown Opal SSC feature name detected\n"
+        json_append_array "TCG violation" "unknown Opal SSC feature name detected"
+    else
+        printf "SSC version: 2.0X (minor version not detectable)\n"
+        json_report "SSC version" "2.0X"
+    fi
 fi
-# TODO add Pyrite SSC version info
+
+if [ $FEATURE_PYRITE == "true" ]; then
+    if [ "$PYRITE_VERSION" == "unknown" ]; then
+        printf "[TCG violation] unknown Pyrite SSC feature name detected\n"
+        json_append_array "TCG violation" "unknown Pyrite SSC feature name detected"
+    else
+        printf "SSC version: $PYRITE_VERSION\n"
+        json_report "SSC version" "$PYRITE_VERSION"
+    fi
+fi
 
 if [ "$MEDIA_ENCRYPTION" == "1" ]; then
-    printf "hardware encryption: ${GREEN}enabled${NC}\n"
+    printf "hardware encryption: enabled\n"
+    json_report "hardware ecnryption" "enabled"
 elif [ "$MEDIA_ENCRYPTION" == "0" ]; then
-    printf "hardware encryption: ${RED}unavailable${NC}\n"
+    printf "hardware encryption: unavailable\n"
+    json_report "hardware ecnryption" "not supported"
 else
     printf "${RED}[TCG violation] unable to obtain information on hardware encryption${NC}\n"
+    json_append_array "TCG violation" "unable to obtain information on hardware encryption"
 fi
 
 if $FEATURE_SINGLE_USER_MODE; then
-    printf "single user mode: ${GREEN}supported${NC}\n"
+    printf "single user mode: supported\n"
+    json_report "single user mode" "supported"
 else
-    printf "single user mode: ${RED}not supported${NC}\n"
+    printf "single user mode: not supported\n"
+    json_report "single user mode" "not supported"
 fi
 
 # TODO rewrite into case statement
 if [ "$DATA_REMOVAL_MECHANISM" == "1" ]; then
-    printf "data removal mechanism: ${GREEN}Overwrite Data Erase${NC}\n"
+    printf "data removal mechanism: Overwrite Data Erase\n"
+    json_report "data removal mechanism" "Overwrite Data Erase"
 elif [ "$DATA_REMOVAL_MECHANISM" == "2" ]; then
-    printf "data removal mechanism: ${GREEN}Block Erase${NC}\n"
+    printf "data removal mechanism: Block Erase\n"
+    json_report "data removal mechanism" "Block Erase"
 elif [ "$DATA_REMOVAL_MECHANISM" == "4" ]; then
-    printf "data removal mechanism: ${GREEN}Cryptographic Erase${NC}\n"
+    printf "data removal mechanism: Cryptographic Erase\n"
+    json_report "data removal mechanism" "Cryptographic Erase"
 elif [ "$DATA_REMOVAL_MECHANISM" == "32" ]; then
-    printf "data removal mechanism: ${GREEN}Vendor Specific Erase${NC}\n"
+    printf "data removal mechanism: Vendor Specific Erase\n"
+    json_report "data removal mechanism" "Vendor Specific Erase"
 else
-    printf "data removal mechanism: ${RED}unspecified${NC}\n"
+    printf "data removal mechanism: unspecified\n"
+    json_report "data removal mechanism" "unspecified"
 fi
 
 if [ "$MBR_SHADOWING" == "0" ]; then
-    printf "MBR shadowing: ${GREEN}supported${NC}\n"
+    printf "MBR shadowing: supported\n"
+    json_report "MBR shadowing" "supported"
 else
-    printf "MBR shadowing: ${RED}not supported${NC}\n"
+    printf "MBR shadowing: not supported\n"
+    json_report "MBR shadowing" "not supported"
 fi
 
-[ $FEATURE_OPAL == true -a $MEDIA_ENCRYPTION == "0" ] && printf "${RED}[TCG violation] drive implements Opal but does not provide hardware encryption${NC}\n"
-[ $FEATURE_PYRITE == true -a $MEDIA_ENCRYPTION == "1" ] && printf "${RED}[TCG violation] drive implements Pyrite but claims hardware encryption${NC}\n"
+if [ $FEATURE_OPAL == true -a $MEDIA_ENCRYPTION == "0" ]; then
+    printf "${RED}[TCG violation] drive implements Opal but does not provide hardware encryption${NC}\n"
+    json_append_array "TCG violation" "drive implements Opal but does not provide hardware encryption"
+fi
+
+if [ $FEATURE_PYRITE == true -a $MEDIA_ENCRYPTION == "1" ]; then
+    printf "${RED}[TCG violation] drive implements Pyrite but claims hardware encryption${NC}\n"
+    json_append_array "TCG violation" "drive implements Pyrite but claims hardware encryption"
+fi
 
 echo
 printf "All detected features:\n"
 for f in "${features[@]}"; do
     printf "    $f"
     printf "\n"
+
+    json_append_array "features" "$f"
 done
