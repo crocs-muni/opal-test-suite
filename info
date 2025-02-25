@@ -1,5 +1,7 @@
 #!/bin/bash
 
+VERSION=1
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
@@ -88,16 +90,15 @@ else
 fi
 
 if [ $OUT_JSON == "true" ]; then
-    echo "{\"timestamp\": \"$(date +%d/%m/%y-%T)\"}" > $OUT_JSON_FILE
+    echo "{\"info-version\": \"$VERSION\"}" > $OUT_JSON_FILE
+    json_report "timestamp" "$(date -Iseconds)"
     json_init_array "features"
     json_init_array "TCG violation"
 fi
 
 printf "|     DRIVE INFORMATION     |\n\n"
 [ $TEST_FILE == "true" ] && printf "SOURCE: ${DISCOVERY_HOLDER}\n\n"
-
 [ $TEST_FILE == "false" ] && printf "device file: ${DEV}\n"
-[ $TEST_FILE == "false" ] && json_report "device file" "${DEV}"
 
 if command -v lsblk >/dev/null && [ $TEST_FILE == "false" ]; then
     VALUE_RM=$(lsblk --noheadings --nodeps --paths --raw --output RM $DEV)
@@ -132,12 +133,13 @@ json_report "physical block size (bytes)" "$VALUE"
 
 if [ $TEST_FILE == "false" ] && command -v nvme >/dev/null && command -v lsblk >/dev/null && [ "$VALUE_TRAN" == "nvme" ]; then
     printf "NVMe profiles:\n"
-    json_init_array "NVMe profiles"
 
     while read -r profile; do
         printf "    $profile\n"
         json_append_array "NVMe profiles" "$profile"
     done < <(sudo nvme id-ns $DEV -H | grep "Metadata Size:")
+
+    echo "$(jq ". += {\"NVMe profiles\": $(nvme id-ns $DEV -o json | jq -r '.lbafs')}" $OUT_JSON_FILE)" > $OUT_JSON_FILE
 fi
 
 features=()
