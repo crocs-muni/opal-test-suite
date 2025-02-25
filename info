@@ -158,6 +158,34 @@ while read -r feature; do
             MBR_SHADOWING=$(get_discovery0_value '"Locking Feature"' '"MBR Shadowing Not Supported"')
             ;;
 
+        "Opal SSC V2 Feature")
+            OPAL_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"SSC Minor Version Number"')
+            FEATURE_OPAL=true
+            features+=("$feature")
+            ;;
+
+        "Pyrite SSC V2 Feature")
+            PYRITE_VERSION="2.0X"
+            FEATURE_PYRITE=true
+            features+=("$feature")
+            ;;
+
+        "Opal SSC V1 Feature")
+            if [ "$FEATURE_OPAL" == "false" ]; then
+                OPAL_VERSION="1.0"
+            fi
+            FEATURE_OPAL=true
+            features+=("$feature")
+            ;;
+
+        "Pyrite SSC V1 Feature")
+            if [ "$FEATURE_PYRITE" == "false" ]; then
+                PYRITE_VERSION="1.0"
+            fi
+            FEATURE_PYRITE=true
+            features+=("$feature")
+            ;;
+
         "Single User Mode Feature")
             FEATURE_SINGLE_USER_MODE=true
             features+=("$feature")
@@ -174,36 +202,6 @@ while read -r feature; do
             features+=("$feature")
             ;;
     esac
-
-    [[ "$feature" =~ "Opal" ]] && {
-
-        if [ "$FEATURE_OPAL" == "false" -o "$OPAL_VERSION" != "2" ]; then
-            if [ "$feature" == "Opal SSC V2 Feature" ]; then
-                OPAL_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"SSC Minor Version Number"')
-            elif [ "$feature" == "Opal SSC Feature" ]; then
-                OPAL_VERSION="1.0"
-            else
-                OPAL_VERSION="unknown"
-            fi
-        fi
-
-        FEATURE_OPAL=true
-    }
-
-    [[ "$feature" =~ "Pyrite" ]] && {
-
-        if [ "$FEATURE_PYRITE" == "false" -o "$PYRITE_VERSION" != "2.0X" ]; then
-            if [ "$feature" == "Pyrite SSC V2.00 Feature" ]; then
-                PYRITE_VERSION="2.0X"
-            elif [ "$feature" == "Pyrite SSC Feature" ]; then
-                PYRITE_VERSION="1.0"
-            else
-                PYRITE_VERSION="unknown"
-            fi
-        fi
-
-        FEATURE_PYRITE=true
-    }
 done < <(jq -r '."Discovery 0" | keys[]' $DISCOVERY_HOLDER)
 
 if [ $FEATURE_LOCKING == false ]; then
@@ -218,8 +216,16 @@ fi
 
 echo
 # TODO other SSCs
-[ $FEATURE_OPAL == true ] && printf "SSC: Opal\n"
-[ $FEATURE_PYRITE == true ] && printf "SSC: Pyrite\n"
+if [ $FEATURE_OPAL == true ]; then
+    printf "SSC: Opal\n"
+    json_report "SSC" "Opal"
+elif [ $FEATURE_PYRITE == true ]; then
+    printf "SSC: Pyrite\n"
+    json_report "SSC" "Pyrite"
+else
+    printf "SSC: unknown\n"
+    json_report "SSC" "unknown"
+fi
 
 # TODO write test to try proper minor version detection
 if [ $FEATURE_OPAL == "true" ]; then
@@ -229,9 +235,6 @@ if [ $FEATURE_OPAL == "true" ]; then
     elif [ "$OPAL_VERSION" == "30" ]; then
         printf "SSC version: 2.30\n"
         json_report "SSC version" "2.30"
-    elif [ "$OPAL_VERSION" == "unknown" ]; then
-        printf "[TCG violation] unknown Opal SSC feature name detected\n"
-        json_append_array "TCG violation" "unknown Opal SSC feature name detected"
     else
         printf "SSC version: 2.0X (minor version not detectable)\n"
         json_report "SSC version" "2.0X"
@@ -239,13 +242,8 @@ if [ $FEATURE_OPAL == "true" ]; then
 fi
 
 if [ $FEATURE_PYRITE == "true" ]; then
-    if [ "$PYRITE_VERSION" == "unknown" ]; then
-        printf "[TCG violation] unknown Pyrite SSC feature name detected\n"
-        json_append_array "TCG violation" "unknown Pyrite SSC feature name detected"
-    else
-        printf "SSC version: $PYRITE_VERSION\n"
-        json_report "SSC version" "$PYRITE_VERSION"
-    fi
+    printf "SSC version: $PYRITE_VERSION\n"
+    json_report "SSC version" "$PYRITE_VERSION"
 fi
 
 if [ "$MEDIA_ENCRYPTION" == "1" ]; then
