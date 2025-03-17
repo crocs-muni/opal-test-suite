@@ -1,45 +1,89 @@
 #!/bin/bash
 
-set -o pipefail
-
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-function get_discovery_var {
-    _size=$($DISCOVERY $DEV 3 | jq -r '."Discovery 0"."Geometry Feature".LogicalBlockSize')
+QUIET=false
 
-    [ $? -ne 0 ] &&
-        # TODO check for other source of LBA size
-        printf "\n${RED}Discovery0 failed, unable to continue!${NC}\n" && exit 1
 
-    printf $_size
+function get_discovery0_value ()
+{
+    [ -z $DISCOVERY0_HOLDER ] && return 1
+    local _discovery='"Discovery 0"'
+
+    local _value=$(jq -r ".${_discovery}.${1}.${2}" $DISCOVERY0_HOLDER)
+
+    [ $? -ne 0 ] && printf "[WARNING] unable to obtain ${2}\n" && return 1
+
+    printf "$_value"
 }
 
-# Update opal-toolset submodule
-printf "Updating opal-toolset ...\n"
-git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
-( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+
+command -v jq >/dev/null || { printf "${RED}jq command not installed; install and rerun to continue${NC}\n" && exit 1; }
+
+[ -z "$DEV" ] && printf "[WARNING] variable DEV must be defined (partition or block device), test skipped\n" && exit 1
+[[ ! -e $DEV ]] && printf "${RED}[ERROR] ${DEV} not found${NC}\n" && exit 1
+
+[ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true
 
 [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
 DISCOVERY=$OPAL_TOOLSET_PATH/discovery
-[ ! -f "$DISCOVERY" ] && printf "Invalid path $DISCOVERY.\n" && exit 1
+[ ! -f "$DISCOVERY" ] && printf "[ERROR] invalid path $DISCOVERY\n" && exit 1
 
-[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
 
-# Check if device exists
-lsblk $DEV 1>/dev/null || exit 1;
+[ $QUIET == "false" ] && printf "Resolving Opal version ...\n"
 
-D0=$($DISCOVERY $DEV 3)
+DISCOVERY0_HOLDER="$(mktemp -q)"
+[ $? -ne 0 ] && { printf "${RED}[ERROR] could not create file${NC}\n" && exit 1; }
 
-if ! echo $D0 | jq -e '."Discovery 0" | has("Opal SSC V2 Feature")' 1> /dev/null; then
-    printf "Opal 1 detected\n"
+DISCOVERY2_HOLDER="$(mktemp -q)"
+[ $? -ne 0 ] && { printf "${RED}[ERROR] could not create file${NC}\n" && exit 1; }
+
+$DISCOVERY $DEV 3 > $DISCOVERY0_HOLDER || { printf "${RED}[ERROR] Discovery0 failed${NC}\n" && exit 1; }
+$DISCOVERY $DEV 5 > $DISCOVERY2_HOLDER 2>/dev/null || { printf "${RED}[ERROR] Discovery2 failed${NC}\n" && exit 1; }
+
+# Check if Opal2 device was supplied
+jq -r '."Discovery 0"."Opal SSC V2 Feature"' $DISCOVERY0_HOLDER >/dev/null 2>&1 || { printf "[WARNING] device does not implement Opal2, test skipped\n"; exit 1; }
+
+# Check Opal SSC v2 Feature descriptor version
+FEATURE_DESCRIPTOR_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"Version"')
+[ $? -eq 1 ] && printf "${RED}[ERROR] feature descriptor version of Opal SSC v2 Feature not found${NC}\n" && exit 1
+
+BLOCK_SID_AUTH_FEATURE=false
+PSID_AUTHORITY=false
+INTERFACE_CONTROL_TEMPLATE=false
+REPORTED_MINOR_VERSION="unknown"
+DEDUCED_MINOR_VERSION="unknown"
+
+if [ $FEATURE_DESCRIPTOR_VERSION == "2" ]; then
+    REPORTED_MINOR_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"Minor Version"')
+    [ $? -eq 1 ] && REPORTED_MINOR_VERSION="unknown"
+elif [ $FEATURE_DESCRIPTOR_VERSION == "1" ]; then
+    grep "Block SID Authentication Feature" $DISCOVERY0_HOLDER >/dev/null 2>&1 && BLOCK_SID_AUTH_FEATURE=true
+    grep "0x000000090001ff01" $DISCOVERY2_HOLDER >/dev/null 2>&1 && PSID_AUTHORITY=true
+    grep "0x0000020400000007" $DISCOVERY2_HOLDER >/dev/null 2>&1 && INTERFACE_CONTROL_TEMPLATE=true
+
+    [ $BLOCK_SID_AUTH_FEATURE == "true" ] && [ $PSID_AUTHORITY == "true" ] && [ $INTERFACE_CONTROL_TEMPLATE == "false" ] && DEDUCED_MINOR_VERSION=2
+    [ $PSID_AUTHORITY == "true" ] && [ $INTERFACE_CONTROL_TEMPLATE == "false" ] && DEDUCED_MINOR_VERSION=1
+    [ $INTERFACE_CONTROL_TEMPLATE == "true" ] && DEDUCED_MINOR_VERSION=0
 fi
 
-if echo $D0 | jq -e '."Discovery 0"."Opal SSC V2 Feature" | has("Minor Version")' 1> /dev/null; then
-    MINOR_VERSION=$(echo $D0 | jq -e '."Discovery 0"."Opal SSC V2 Feature"."Minor Version"')
-    printf "Minor version $MINOR_VERSION detected, device supports Opal 2.0$MINOR_VERSION\n"
-    exit 0
+[ $QUIET == "false" ] && printf "reported minor version: ${REPORTED_MINOR_VERSION}\n"
+[ $QUIET == "false" ] && printf "deduced minor version: ${DEDUCED_MINOR_VERSION}\n"
+
+if [ $REPORTED_MINOR_VERSION != "unknown" ]; then
+    if [ $REPORTED_MINOR_VERSION != "30" -a $REPORTED_MINOR_VERSION != $DEDUCED_MINOR_VERSION ]; then
+        [ $QUIET == "false" ] && printf "[WARNING] inconsistency in reported minor version and drive features, cannot resolve minor version\n"
+        MINOR_VERSION="unknown"
+    fi
+    MINOR_VERSION=$REPORTED_MINOR_VERSION
+else
+    MINOR_VERSION=$DEDUCED_MINOR_VERSION
 fi
 
-D2=$($DISCOVERY $DEV 5)
+if [ $QUIET == "false" ]; then
+    printf "Opal2 minor version: ${MINOR_VERSION}\n"
+else
+    printf "${MINOR_VERSION}"
+fi
