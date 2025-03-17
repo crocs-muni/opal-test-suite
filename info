@@ -12,6 +12,8 @@ FEATURE_OPAL=false
 FEATURE_PYRITE=false
 FEATURE_SINGLE_USER_MODE=false
 
+OPAL2=false
+
 OUT_JSON=true
 OUT_JSON_FILE="info.json"
 TEST_FILE=false
@@ -44,7 +46,7 @@ function get_discovery0_value ()
 
     local _value=$(jq -r ".${_discovery}.${1}.${2}" $DISCOVERY_HOLDER)
 
-    [ $? -ne 0 ] && printf "$WARNING: unable to obtain ${2}\n" && return 1
+    [ $? -ne 0 ] && printf "WARNING: unable to obtain ${2}\n" && return 1
 
     printf "$_value"
 }
@@ -60,11 +62,7 @@ function get_identify_value ()
     printf "${_value}"
 }
 
-# TODO when #3 is merged
-#utils/update_submodule || exit 1
-
-git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
-( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+utils/update_submodule || exit 1
 
 [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
 DISCOVERY=$OPAL_TOOLSET_PATH/discovery
@@ -159,8 +157,8 @@ while read -r feature; do
             ;;
 
         "Opal SSC V2 Feature")
-            OPAL_VERSION=$(get_discovery0_value '"Opal SSC V2 Feature"' '"SSC Minor Version Number"')
             FEATURE_OPAL=true
+            OPAL2=true
             features+=("$feature")
             ;;
 
@@ -171,9 +169,6 @@ while read -r feature; do
             ;;
 
         "Opal SSC V1 Feature")
-            if [ "$FEATURE_OPAL" == "false" ]; then
-                OPAL_VERSION="1.0"
-            fi
             FEATURE_OPAL=true
             features+=("$feature")
             ;;
@@ -227,18 +222,25 @@ else
     json_report "SSC" "unknown"
 fi
 
-# TODO write test to try proper minor version detection
-if [ $FEATURE_OPAL == "true" ]; then
-    if [ "$OPAL_VERSION" == "2" ]; then
-        printf "SSC version: 2.02\n"
-        json_report "SSC version" "2.02"
-    elif [ "$OPAL_VERSION" == "30" ]; then
+if [ $OPAL2 == "true" ]; then
+    MINOR_VERSION=$(DEV=$DEV ./get_opal_minor_version -q)
+    [ $? -eq 1 ] && printf "[ERROR] internal failure\n" && exit 1
+
+    if [ "$MINOR_VERSION" == "30" ]; then
         printf "SSC version: 2.30\n"
         json_report "SSC version" "2.30"
+    elif [ "$OPAL_VERSION" == "unknown" ]; then
+        printf "SSC version: unknown (not detectable)\n"
+        json_report "SSC version" "unknown"
     else
-        printf "SSC version: 2.0X (minor version not detectable)\n"
-        json_report "SSC version" "2.0X"
+        printf "SSC version: 2.0${MINOR_VERSION}\n"
+        json_report "SSC version" "2.0${MINOR_VERSION}"
     fi
+fi
+
+if [ $OPAL2 == "false" -a $FEATURE_OPAL == "true" ]; then
+    printf "SSC version: 1.0\n"
+    json_report "SSC version" "1.0"
 fi
 
 if [ $FEATURE_PYRITE == "true" ]; then
