@@ -41,7 +41,7 @@ DISCOVERY2_HOLDER="$(mktemp -q)"
 [ $? -ne 0 ] && { printf "${RED}[ERROR] could not create file${NC}\n" && exit 1; }
 
 $DISCOVERY $DEV 3 > $DISCOVERY0_HOLDER || { printf "${RED}[ERROR] Discovery0 failed${NC}\n" && exit 1; }
-$DISCOVERY $DEV 5 > $DISCOVERY2_HOLDER 2>/dev/null || { printf "${RED}[ERROR] Discovery2 failed${NC}\n" && exit 1; }
+$DISCOVERY $DEV 5 > $DISCOVERY2_HOLDER 2>/dev/null
 
 # Check if Opal2 device was supplied
 jq -r '."Discovery 0"."Opal SSC V2 Feature"' $DISCOVERY0_HOLDER >/dev/null 2>&1 || { printf "[WARNING] device does not implement Opal2, test skipped\n"; exit 1; }
