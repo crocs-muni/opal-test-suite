@@ -12,9 +12,9 @@ CONTROL=$CONTROL_PATH/control
 
 printf "Regenerating locking range key...\n\n"
 
-$CONTROL -V regenerate_key $DEV			\
-	--locking-range $LR_ID			\
-	--verify-pin-hex=$ADMIN_VERIFY_PIN	\
+$CONTROL -V regenerate_key $DEV	        \
+	--locking-range $LR_ID              \
+	--verify-pin-hex=$ADMIN_VERIFY_PIN  \
 	|| { printf "\nFailed to regenerate key of locking range witd id $LR_ID.\n" && exit 1; }
 
 printf "\nDone.\n"

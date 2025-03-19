@@ -10,10 +10,15 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
 [ -z "$ADMIN_PIN" ] && printf "WARNING: Variable ADMIN_PIN must be defined (admin pin in hexadecimal), test skipped.\n" && exit 1
 
+[ -z $LR ] && LR=1
+
 [ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
 if [ $QUIET == "false" ]; then printf "Setting admin pin...\n\n"; fi
 
-$CONTROL $VERBOSE setup_tper $DEV --assign-pin-hex $ADMIN_PIN || { printf "\nAdmin pin setting failed.\n" && exit 1; }
+$CONTROL $VERBOSE setup_tper $DEV \
+    --assign-pin-hex $ADMIN_PIN   \
+    --locking-range $LR --sum     \
+    || { printf "\nAdmin pin setting failed.\n" && exit 1; }
 
 if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi

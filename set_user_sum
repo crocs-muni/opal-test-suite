@@ -1,0 +1,29 @@
+#!/bin/bash
+
+ME="set_user"
+QUIET=false
+VERBOSE=-V
+
+[ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
+CONTROL=$CONTROL_PATH/control
+[ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+[ -z "$ADMIN_VERIFY_PIN" ] && printf "WARNING: Variable ADMIN_VERIFY_PIN must be defined (admin pin in hexadecimal), test skipped.\n" && exit 1
+[ -z "$USER_ASSIGN_PIN" ] && printf "WARNING: Variable USER_ASSIGN_PIN must be defined (new user pin in hexadecimal), test skipped.\n" && exit 1
+
+[ -z $LR ] && LR=1
+[ -z "$USER_ID" ] && USER_ID=2
+
+[ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
+
+if [ $QUIET == "false" ]; then printf "[${ME}] setting up a new user with id ${USER_ID}...\n\n"; fi
+
+$CONTROL $VERBOSE setup_user $DEV       \
+	--verify-pin-hex=$ADMIN_VERIFY_PIN  \
+	--user $USER_ID                     \
+	--assign-pin-hex=$USER_ASSIGN_PIN   \
+	--locking-range $LR --sum           \
+	|| { printf "\n[${ME}] setting up a new user with id ${USER_ID} failed\n" && exit 1; }
+
+if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi
