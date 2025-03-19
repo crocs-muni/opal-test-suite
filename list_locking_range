@@ -1,5 +1,8 @@
 #!/bin/bash
 
+QUIET=false
+VERBOSE=-V
+
 # Set path to the control tool.
 [ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
 CONTROL=$CONTROL_PATH/control
@@ -11,12 +14,14 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$LR_ID" ] && LR_ID=1
 [ -z "$USER_ID" ] && USER_ID=1
 
-printf "Listing locking range...\n\n"
+[ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
-$CONTROL -V list_range $DEV			\
-	--locking-range $LR_ID			\
-	--user $USER_ID				\
-	--verify-pin-hex=$USER_VERIFY_PIN	\
+if [ $QUIET == "false" ]; then printf "Listing locking range...\n\n"; fi
+
+$CONTROL $VERBOSE list_range $DEV     \
+	--locking-range $LR_ID            \
+	--user $USER_ID                   \
+	--verify-pin-hex=$USER_VERIFY_PIN \
 	||  { printf "\nFailed to list the locking range.\n" && exit 1; }
 
-printf "\nDone.\n"
+if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi
