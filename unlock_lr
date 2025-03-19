@@ -1,5 +1,8 @@
 #!/bin/bash
 
+QUIET=false
+VERBOSE=-V
+
 # Set path to the control tool.
 [ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
 CONTROL=$CONTROL_PATH/control
@@ -10,15 +13,19 @@ CONTROL=$CONTROL_PATH/control
 
 [ -z "$LR_ID" ] && LR_ID=1
 [ -z "$USER_ID" ] && USER_ID=1
+[ -z "$READ" ] && READ=0
+[ -z "$WRITE" ] && WRITE=0
 
-printf "Unlocking locking range (id $LR_ID)...\n\n"
+[ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
-$CONTROL -V unlock $DEV \
-    --locking-range $LR_ID \
-    --user $USER_ID \
-    --verify-pin-hex $PIN \
-    --read-locked 0 \
-    --write-locked 0 \
+if [ $QUIET == "false" ]; then printf "Unlocking locking range (id $LR_ID)...\n\n"; fi
+
+$CONTROL $VERBOSE unlock $DEV   \
+    --locking-range $LR_ID      \
+    --user $USER_ID             \   
+    --verify-pin-hex $PIN       \
+    --read-locked $READ         \
+    --write-locked $WRITE       \
     || { printf "\nFailed to unlock the locking range.\n" && exit 1; }
 
-printf "\nDone.\n"
+if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi
