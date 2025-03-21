@@ -1,0 +1,133 @@
+#!/bin/bash
+
+# expects the drive to support Single User Mode; the support will be checked from info.json once all tests are put together
+
+##################################### TMP; will be configured elsewhere
+PIN_ADMIN="1010"
+PIN_USER="1111"
+PSID=3735343431383532373134323932333233373639313930333437383037323330
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+#####################################
+
+PATTERN_FILE=pattern.img
+UNLOCKED_PATTERN_FILE=unlocked_pattern.img
+LOCKED_UNLOCKED_PATTERN_FILE=locked_unlocked_pattern.img
+
+
+function dd_read_img()
+{
+    sudo dd if=$DEV of=$3 bs=$BS skip=$1 count=$2 iflag=direct status=none
+}
+
+function dd_write()
+{
+    sudo dd if=$3 of=$DEV bs=$BS seek=$1 count=$2 oflag=direct status=none
+}
+
+function set_read_write_permissions()
+{
+    local LR_ID=$1
+    local READ=$2
+    local WRITE=$3
+
+    if [ $READ -eq 0 ];  then READ_OP="enable";  else READ_OP="disable";  fi
+    if [ $WRITE -eq 0 ]; then WRITE_OP="enable"; else WRITE_OP="disable"; fi
+
+    printf "\n[LR SET PERMISSIONS] LR ${LR_ID}, ${WRITE_OP} write, ${READ_OP} read\n"
+    DEV=$DEV PIN_USER=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID READ=$READ WRITE=$WRITE ./lock_lr -q || exit 1
+    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID ./list_locking_range -q || return 1
+    printf "[LR SET PERMISSIONS] LR ${LR_ID}: OK\n"
+
+}
+
+function sum_lr_def()
+{
+    local LR_START=$1
+    local LR_LENGTH=$2
+    local LR_ID=$3
+
+    printf "\n[SINGLE USER MODE LR DEF] LR ${LR_ID}, LR start: ${LR_START}, LR length: ${LR_LENGTH}\n"
+    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID LR_START=$LR_START LR_LENGTH=$LR_LENGTH ./set_locking_range_sum -q || exit 1
+    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID ./list_locking_range -q || return 1
+    printf "[SINGLE USER MODE LR DEF] LR ${LR_ID}: OK\n"
+}
+
+function check_lock_unlock_data_integrity()
+{
+    local LR_START=$1
+    local LR_LENGTH=$2
+    local LR_ID=$3
+    local LR_N_BLOCKS=$(($LR_LENGTH / $BS))
+
+    dd_write $(($LR_START / $BS)) $LR_N_BLOCKS $4
+    dd_read_img $(($LR_START / $BS)) $LR_N_BLOCKS $UNLOCKED_PATTERN_FILE
+    cmp $UNLOCKED_PATTERN_FILE $4 || {
+        printf "\n${RED}[FATAL] read data of LR ${LR_ID} is not the same as data written${NC}\n"
+        return 1
+    }
+
+    # Lock LR
+    set_read_write_permissions $LR_ID 1 1
+
+    # Unlock LR
+    set_read_write_permissions $LR_ID 0 0
+
+    dd_read_img $(($LR_START / $BS)) $LR_N_BLOCKS $LOCKED_UNLOCKED_PATTERN_FILE
+    cmp $LOCKED_UNLOCKED_PATTERN_FILE $4 || {
+        printf "\n${RED}[FATAL] decrypted data of LR ${LR_ID} is not the same as data written before encryption${NC}\n"
+        return 1
+    }
+}
+
+
+utils/update_submodule || exit 1
+
+[ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
+CONTROL=$CONTROL_PATH/control
+[ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: variable DEV must be defined (partition or block device), test skipped\n" && exit 1
+[ -z "$PSID" ] && printf "WARNING: variable PSID must be defined, test skipped\n" && exit 1
+
+[ -z "$BS" ] && BS=512
+[ -z "$LR_ID" ] && LR_ID=1
+[ -z "$USER_ID" ] && USER_ID=2
+
+
+# SETUP
+#______________________________________________________________________________
+
+# PSID reset
+DEV=$DEV PIN=$PSID ./psid_reset -q || exit 1
+
+# Set admin
+DEV=$DEV ADMIN_PIN=$PIN_ADMIN ./set_admin_pin_sum -q || exit 1
+
+# Set user
+DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN USER_ASSIGN_PIN=$PIN_USER USER_ID=$USER_ID ./set_user_sum -q || exit 1
+
+# Prepare a reference file with a random pattern
+rm $PATTERN_FILE 2>/dev/null
+sudo dd if=/dev/random of=$PATTERN_FILE bs=$BS count=3 status=none
+
+
+# DEFINE SUM LR, DATA INTEGRITY CHECK
+#______________________________________________________________________________
+LR_START=$BS
+LR_LENGTH=$(($BS * 3))
+
+sum_lr_def $LR_START $LR_LENGTH $LR_ID || printf "${RED}[FATAL] basic definition of a locking range failed${NC}\n"
+
+if check_lock_unlock_data_integrity $LR_START $LR_LENGTH $LR_ID $PATTERN_FILE; then
+    printf "\n[DATA INTEGRITY] LR ${LR_ID}: OK\n"
+    # TODO remove generated files once sure reading from drive is implemented correctly
+else
+    printf "${RED}[FATAL] data integrity violated; \
+    compare pattern written onto drive in ${PATTERN_FILE} and patterns \
+    obtained from drive in ${UNLOCKED_PATTERN_FILE}, ${LOCKED_UNLOCKED_PATTERN_FILE}${NC}\n"
+fi
+
+# TODO check if admin can access SUM LR once enabled in opal-toolset

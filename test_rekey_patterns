@@ -70,7 +70,11 @@ function create_images() {
     # Create admin
     DEV=$DEV ADMIN_PIN=$PINA CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/set_admin_pin || exit 1
 
-    # Create user and a locking range
+    # Create user
+    DEV=$DEV ADMIN_VERIFY_PIN=$PINA USER_ASSIGN_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH \
+    ${OLDPWD}/set_user || exit 1
+
+    # Create locking range
     DEV=$DEV ADMIN_VERIFY_PIN=$PINA USER_ASSIGN_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH \
     LR_START=$START LR_LENGTH=$LENGTH ${OLDPWD}/set_locking_range || exit 1
 

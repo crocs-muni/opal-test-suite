@@ -1,5 +1,8 @@
 #!/bin/bash
 
+QUIET=false
+VERBOSE=-V
+
 [ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
 CONTROL=$CONTROL_PATH/control
 [ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
@@ -7,8 +10,10 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
 [ -z "$PIN" ] && printf "WARNING: Variable PIN must be defined (PSID in hexadecimal), test skipped.\n" && exit 1
 
-printf "Resetting the device...\n\n"
+[ $# -eq 1 ] && [ $1 == "-q" ] && QUIET=true && unset VERBOSE
 
-$CONTROL -V psid_revert $DEV --verify-pin-hex=$PIN || { printf "\nPSID reset failed.\n" && exit 1; }
+if [ $QUIET == "false" ]; then printf "Resetting the device...\n\n"; fi
 
-printf "\nDone.\n"
+$CONTROL $VERBOSE psid_revert $DEV --verify-pin-hex=$PIN || { printf "\nPSID reset failed.\n" && exit 1; }
+
+if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi
