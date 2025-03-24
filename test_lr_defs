@@ -367,4 +367,12 @@ done
 
 # OVERALL
 #______________________________________________________________________________
-
+if ! $DATA_INTEGRITY_VIOLATION \
+    && ! $RW_ERROR \
+    && ! $REDEFINE_0_LENGTH_LR \
+    && ! $OVERLAP; then
+    printf "\n${GREEN}[TEST LR OVERALL] OK${NC}\n"
+else
+    printf "\n${RED}[TEST LR OVERALL] FAIL${NC}\n"
+    exit 1
+fi
