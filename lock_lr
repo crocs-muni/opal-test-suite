@@ -23,7 +23,7 @@ if [ $QUIET == "false" ]; then printf "Locking locking range (id $LR_ID)...\n\n"
 $CONTROL $VERBOSE unlock $DEV   \
     --locking-range $LR_ID      \
     --user $USER_ID             \
-    --verify-pin-hex $PIN_USER  \
+    --verify-pin $PIN_USER      \
     --read-locked $READ         \
     --write-locked $WRITE       \
     || { printf "\nFailed to lock the locking range.\n" && exit 1; }

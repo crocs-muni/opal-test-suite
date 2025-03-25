@@ -8,12 +8,12 @@ CONTROL=$CONTROL_PATH/control
 [ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
 
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
-[ -z "$PIN" ] && printf "WARNING: Variable PIN must be defined (PSID in hexadecimal), test skipped.\n" && exit 1
+[ -z "$PSID" ] && printf "WARNING: Variable PSID must be defined, test skipped.\n" && exit 1
 
 [ $# -eq 1 ] && [ $1 == "-q" ] && QUIET=true && unset VERBOSE
 
 if [ $QUIET == "false" ]; then printf "Resetting the device...\n\n"; fi
 
-$CONTROL $VERBOSE psid_revert $DEV --verify-pin-hex=$PIN || { printf "\nPSID reset failed.\n" && exit 1; }
+$CONTROL $VERBOSE psid_revert $DEV --verify-pin=$PSID || { printf "\nPSID reset failed.\n" && exit 1; }
 
 if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi

@@ -15,14 +15,14 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$USER_ID" ] && USER_ID=2
 
 [ -z "$DEV" ] && printf "[WARNING] variable DEV must be defined (partition or block device), test skipped\n" && exit 1
-[ -z "$USER_VERIFY_PIN" ] && printf "[WARNING] variable ADMIN_VERIFY_PIN must be defined (user pin in hexadecimal), test skipped\n" && exit 1
+[ -z "$USER_VERIFY_PIN" ] && printf "[WARNING] variable ADMIN_VERIFY_PIN must be defined, test skipped\n" && exit 1
 
 [ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
 if [ $QUIET == "false" ]; then printf "\n[${ME}] setting new locking range with id ${LR_ID} for user ${USER_ID}\n\n"; fi
 
 $CONTROL $VERBOSE setup_range $DEV      \
-	--verify-pin-hex $USER_VERIFY_PIN   \
+	--verify-pin $USER_VERIFY_PIN       \
 	--locking-range $LR_ID              \
 	--locking-range-start $LR_START     \
 	--locking-range-length $LR_LENGTH   \

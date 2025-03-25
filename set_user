@@ -11,17 +11,17 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$USER_ID" ] && USER_ID=1
 
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
-[ -z "$ADMIN_VERIFY_PIN" ] && printf "WARNING: Variable ADMIN_VERIFY_PIN must be defined (admin pin in hexadecimal), test skipped.\n" && exit 1
-[ -z "$USER_ASSIGN_PIN" ] && printf "WARNING: Variable USER_ASSIGN_PIN must be defined (new user pin in hexadecimal), test skipped.\n" && exit 1
+[ -z "$ADMIN_VERIFY_PIN" ] && printf "WARNING: Variable ADMIN_VERIFY_PIN must be defined, test skipped.\n" && exit 1
+[ -z "$USER_ASSIGN_PIN" ] && printf "WARNING: Variable USER_ASSIGN_PIN must be defined, test skipped.\n" && exit 1
 
 [ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
 if [ $QUIET == "false" ]; then printf "[${ME}] setting up a new user with id ${USER_ID}...\n\n"; fi
 
 $CONTROL $VERBOSE setup_user $DEV       \
-	--verify-pin-hex=$ADMIN_VERIFY_PIN  \
+	--verify-pin $ADMIN_VERIFY_PIN      \
 	--user $USER_ID                     \
-	--assign-pin-hex=$USER_ASSIGN_PIN   \
+	--assign-pin $USER_ASSIGN_PIN       \
 	|| { printf "\n[${ME}] setting up a new user with id ${USER_ID} failed\n" && exit 1; }
 
 if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi
