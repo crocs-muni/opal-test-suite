@@ -119,7 +119,7 @@ rm $PATTERN_FILE 2>/dev/null
 sudo dd if=/dev/random of=$PATTERN_FILE bs=$BS count=3 status=none
 
 
-# DEFINE SUM LR, DATA INTEGRITY CHECK
+# DEFINE SUM LR, DATA INTEGRITY CHECK, SOLE VP ACCESS
 #______________________________________________________________________________
 LR_START=$BS
 LR_LENGTH=$(($BS * 3))
@@ -134,4 +134,11 @@ else
     printf "obtained from drive in ${UNLOCKED_PATTERN_FILE}, ${LOCKED_UNLOCKED_PATTERN_FILE}${NC}\n"
 fi
 
-# TODO check if admin can access SUM LR once enabled in opal-toolset
+$CONTROL unlock $DEV            \
+    --locking-range $LR_ID      \
+    --admin 1                   \
+    --verify-pin $PIN_ADMIN     \
+    --read-locked 1             \
+    --write-locked 1            \
+    2>/dev/null                 \
+    && printf "\n${RED}[FATAL]: admin accessed a Single User Mode LR${NC}\n" && exit 1
