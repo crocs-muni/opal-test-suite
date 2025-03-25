@@ -5,19 +5,22 @@
 ##################################### TMP; will be configured elsewhere
 PIN_ADMIN="1010"
 PIN_USER="1111"
-PSID=3735343431383532373134323932333233373639313930333437383037323330
+PSID=75441852714292323769190347807230
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 #####################################
 
-PATTERN_FILE=pattern.img
-UNLOCKED_PATTERN_FILE=unlocked_pattern.img
-LOCKED_UNLOCKED_PATTERN_FILE=locked_unlocked_pattern.img
+LOGDIR=log
+LOGDIR_ME=${LOGDIR}/log_test_single_user_mode_$(date "+%F_%T")
+
+PATTERN_FILE=${LOGDIR_ME}/pattern.img
+UNLOCKED_PATTERN_FILE=${LOGDIR_ME}/unlocked_pattern.img
+LOCKED_UNLOCKED_PATTERN_FILE=${LOGDIR_ME}/locked_unlocked_pattern.img
 
 
-function dd_read_img()
+function dd_read()
 {
     sudo dd if=$DEV of=$3 bs=$BS skip=$1 count=$2 iflag=direct status=none
 }
@@ -62,8 +65,8 @@ function check_lock_unlock_data_integrity()
     local LR_ID=$3
     local LR_N_BLOCKS=$(($LR_LENGTH / $BS))
 
-    dd_write $(($LR_START / $BS)) $LR_N_BLOCKS $4
-    dd_read_img $(($LR_START / $BS)) $LR_N_BLOCKS $UNLOCKED_PATTERN_FILE
+    dd_write $LR_START $LR_N_BLOCKS $4
+    dd_read $LR_START $LR_N_BLOCKS $UNLOCKED_PATTERN_FILE
     cmp $UNLOCKED_PATTERN_FILE $4 || {
         printf "\n${RED}[FATAL] read data of LR ${LR_ID} is not the same as data written${NC}\n"
         return 1
@@ -75,7 +78,7 @@ function check_lock_unlock_data_integrity()
     # Unlock LR
     set_read_write_permissions $LR_ID 0 0
 
-    dd_read_img $(($LR_START / $BS)) $LR_N_BLOCKS $LOCKED_UNLOCKED_PATTERN_FILE
+    dd_read $LR_START $LR_N_BLOCKS $LOCKED_UNLOCKED_PATTERN_FILE
     cmp $LOCKED_UNLOCKED_PATTERN_FILE $4 || {
         printf "\n${RED}[FATAL] decrypted data of LR ${LR_ID} is not the same as data written before encryption${NC}\n"
         return 1
@@ -96,6 +99,8 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$LR_ID" ] && LR_ID=1
 [ -z "$USER_ID" ] && USER_ID=2
 
+[ ! -e $LOGDIR ] && mkdir $LOGDIR
+[ ! -e $LOGDIR_ME ] && mkdir $LOGDIR_ME
 
 # SETUP
 #______________________________________________________________________________
@@ -123,11 +128,10 @@ sum_lr_def $LR_START $LR_LENGTH $LR_ID || printf "${RED}[FATAL] basic definition
 
 if check_lock_unlock_data_integrity $LR_START $LR_LENGTH $LR_ID $PATTERN_FILE; then
     printf "\n[DATA INTEGRITY] LR ${LR_ID}: OK\n"
-    # TODO remove generated files once sure reading from drive is implemented correctly
 else
-    printf "${RED}[FATAL] data integrity violated; \
-    compare pattern written onto drive in ${PATTERN_FILE} and patterns \
-    obtained from drive in ${UNLOCKED_PATTERN_FILE}, ${LOCKED_UNLOCKED_PATTERN_FILE}${NC}\n"
+    printf "${RED}[FATAL] data integrity violated;"
+    printf "compare pattern written onto drive in ${PATTERN_FILE} and patterns"
+    printf "obtained from drive in ${UNLOCKED_PATTERN_FILE}, ${LOCKED_UNLOCKED_PATTERN_FILE}${NC}\n"
 fi
 
 # TODO check if admin can access SUM LR once enabled in opal-toolset
