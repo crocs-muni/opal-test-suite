@@ -101,7 +101,7 @@ CONTROL=$CONTROL_PATH/control
 #______________________________________________________________________________
 
 # PSID reset
-DEV=$DEV PIN=$PSID ./psid_reset -q || exit 1
+DEV=$DEV PSID=$PSID ./psid_reset -q || exit 1
 
 # Set admin
 DEV=$DEV ADMIN_PIN=$PIN_ADMIN ./set_admin_pin_sum -q || exit 1
