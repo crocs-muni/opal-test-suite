@@ -33,19 +33,99 @@ function dd_write()
     sudo dd if=$3 of=$DEV bs=$BS seek=$1 count=$2 oflag=direct status=none
 }
 
+function check_lr_properties()
+{
+    local expected_lr_id=$1
+    local expected_lr_start=$2
+    local expected_lr_length=$3
+    local expected_read_locked=$4
+    local expected_write_locked=$5
+    local expected_read_lock_enabled=$6
+    local expected_write_lock_enabled=$7
+
+    local listed_lr=$(DEV=$DEV USER_VERIFY_PIN=$PIN LR_ID=$LR_ID ./list_locking_range -q)
+    printf "$listed_lr\n"
+
+    [ ! $? -eq 0 ] && printf "${RED}[FATAL] could not list LR ${expected_lr_id}${NC}\n" && return 1
+
+    local lr_id=$(printf "$listed_lr" | sed -n 's/.*Locking range \([0-9]\+\):.*/\1/p')
+    [ -z $lr_id -o "$lr_id" != "$expected_lr_id" ] && printf "${RED}[FATAL] obtained listing of incorrect LR${NC}\n" && return 1
+
+    local lr_start=$(echo "$listed_lr" | sed -n 's/.*Start: \([0-9]\+\),.*/\1/p')
+    [ -z "$lr_start" -o "$lr_start" != "$expected_lr_start" ] && {
+        printf "${RED}[FATAL] incorrect LR start was set${NC}\n"
+        printf "expected: ${expected_lr_start}; got: ${lr_start}\n"
+        return 1
+    }
+
+    local lr_length=$(echo "$listed_lr" | sed -n 's/.*length: \([0-9]\+\),.*/\1/p')
+    [ -z "$lr_length" -o "$lr_length" != "$expected_lr_length" ] && {
+        printf "${RED}[FATAL] incorrect LR length was set${NC}\n"
+        printf "expected: ${expected_lr_length}; got: ${lr_length}\n"
+        return 1
+    }
+
+    local read_locked=$(echo "$listed_lr" | sed -n 's/.*R locked: \([a-z]\+\),.*/\1/p')
+    [ -z "$read_locked" -o "$read_locked" != "$expected_read_locked" ] && {
+        printf "${RED}[FATAL] incorrect LR reading access control (read locked) was set${NC}\n"
+        printf "expected: ${expected_read_locked}; got: ${read_locked}\n"
+        return 1
+    }
+
+    local write_locked=$(echo "$listed_lr" | sed -n 's/.*W locked: \([a-z]\+\),.*/\1/p')
+    [ -z "$write_locked" -o "$write_locked" != "$expected_write_locked" ] && {
+        printf "${RED}[FATAL] incorrect LR writing access control (write locked) was set${NC}\n"
+        printf "expected: ${expected_write_locked}; got: ${write_locked}\n"
+        return 1
+    }
+
+    local read_lock_enabled=$(echo "$listed_lr" | sed -n 's/.*R lock enabled: \([a-z]\+\),.*/\1/p')
+    [ -z "$read_lock_enabled" -o "$read_lock_enabled" != "$expected_read_lock_enabled" ] && {
+        printf "${RED}[FATAL] incorrect LR reading control (read_lock_enabled) was set${NC}\n"
+        printf "expected: ${expected_read_lock_enabled}; got: ${read_lock_enabled}\n"
+        return 1
+    }
+
+    local write_lock_enabled=$(echo "$listed_lr" | sed -n 's/.*W lock enabled: \([a-z]\+\)\..*/\1/p')
+    [ -z "$write_lock_enabled" -o "$write_lock_enabled" != "$expected_write_lock_enabled" ] && {
+        printf "${RED}[FATAL] incorrect LR writing control (write_lock_enabled) was set${NC}\n"
+        printf "expected: ${expected_write_lock_enabled}; got: ${write_lock_enabled}\n"
+        return 1
+    }
+
+    return 0
+}
+
 function set_read_write_permissions()
 {
     local LR_ID=$1
-    local READ=$2
-    local WRITE=$3
+    local LR_START=$2
+    local LR_LENGTH=$3
+    local READ=$4
+    local WRITE=$5
 
-    if [ $READ -eq 0 ];  then READ_OP="enable";  else READ_OP="disable";  fi
-    if [ $WRITE -eq 0 ]; then WRITE_OP="enable"; else WRITE_OP="disable"; fi
+    if [ $READ -eq 0 ]; then
+        local READ_OP="enable"
+        local READ_LOCKED="no"
+    else
+        local READ_OP="disable"
+        local READ_LOCKED="yes"
+    fi
+
+    if [ $WRITE -eq 0 ]; then
+        local WRITE_OP="enable"
+        local WRITE_LOCKED="no"
+    else
+        local WRITE_OP="disable"
+        local WRITE_LOCKED="yes"
+    fi
 
     printf "\n[LR SET PERMISSIONS] LR ${LR_ID}, ${WRITE_OP} write, ${READ_OP} read\n"
-    DEV=$DEV PIN_USER=$PIN LR_ID=$LR_ID USER_ID=$USER_ID READ=$READ WRITE=$WRITE ./lock_lr -q || exit 1
-    DEV=$DEV USER_VERIFY_PIN=$PIN LR_ID=$LR_ID ./list_locking_range -q || exit 1
+    DEV=$DEV PIN_USER=$PIN LR_ID=$LR_ID USER_ID=$USER_ID READ=$READ WRITE=$WRITE ./lock_lr -q || return 1
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH $READ_LOCKED $WRITE_LOCKED "yes" "yes" || return 1
     printf "[LR SET PERMISSIONS] LR ${LR_ID}: OK\n"
+
+    return 0
 
 }
 
@@ -56,7 +136,7 @@ function check_rw_permission_combinations()
     local LR_ID=$3
 
     # Complete lock
-    set_read_write_permissions $LR_ID 1 1
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1
 
     # Check if secured data was accessed if reading locked LR did not fail
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE 2>/dev/null \
@@ -79,7 +159,7 @@ function check_rw_permission_combinations()
         )
 
     # Read allowed, write locked
-    set_read_write_permissions $LR_ID 0 1
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 1
 
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE || {
         RW_ERROR=true
@@ -98,7 +178,7 @@ function check_rw_permission_combinations()
         )
 
     # Read locked, write allowed
-    set_read_write_permissions $LR_ID 1 0
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 0
 
     # Check if secured data was accessed if reading locked LR did not fail
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE 2>/dev/null \
@@ -114,7 +194,7 @@ function check_rw_permission_combinations()
     }
 
     # Complete unlock
-    set_read_write_permissions $LR_ID 0 0
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0
 
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE || {
         RW_ERROR=true
@@ -129,6 +209,8 @@ function check_rw_permission_combinations()
         RW_ERROR=true
         printf "${RED}[FATAL] writing to unlocked LR ${LR_ID} failed${NC}\n"
     }
+
+    return 0
 }
 
 function check_lock_unlock_data_integrity()
@@ -146,16 +228,18 @@ function check_lock_unlock_data_integrity()
     }
 
     # Lock LR
-    set_read_write_permissions $LR_ID 1 1
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1
 
     # Unlock LR
-    set_read_write_permissions $LR_ID 0 0
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0
 
     dd_read $LR_START $LR_N_BLOCKS $LOCKED_UNLOCKED_PATTERN_FILE
     cmp $LOCKED_UNLOCKED_PATTERN_FILE $4 || {
         printf "\n${RED}[FATAL] decrypted data of LR ${LR_ID} is not the same as data written before encryption${NC}\n"
         return 1
     }
+
+    return 0
 }
 
 function basic_lr_def()
@@ -166,7 +250,7 @@ function basic_lr_def()
 
     printf "\n[BASIC LR DEF] LR ${LR_ID}, LR start: ${LR_START}, LR length: ${LR_LENGTH}\n"
     DEV=$DEV ADMIN_VERIFY_PIN=$PINA LR_ID=$LR_ID LR_START=$LR_START LR_LENGTH=$LR_LENGTH ./set_locking_range -q || return 1
-    DEV=$DEV USER_VERIFY_PIN=$PIN LR_ID=$LR_ID ./list_locking_range -q || return 1
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH "no" "no" "yes" "yes" || return 1
     printf "[BASIC LR DEF] LR ${LR_ID}: OK\n"
 
     if [ ! $LR_LENGTH -eq 0 ]; then
@@ -176,6 +260,8 @@ function basic_lr_def()
         unset lr_starts[$LR_ID]
         unset lr_lengths[$LR_ID]
     fi
+
+    return 0
 }
 
 function print_active_lrs()
