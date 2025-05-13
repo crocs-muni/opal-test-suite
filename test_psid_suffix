@@ -1,0 +1,20 @@
+#!/bin/bash
+
+[ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
+CONTROL=$CONTROL_PATH/control
+[ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
+
+[ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
+[ -z "$PSID" ] && printf "WARNING: Variable PSID must be defined (PSID), test skipped.\n" && exit 1
+
+# TODO check from info if PSID is supported and was verified, if not verified, run following command:
+DEV=$DEV PIN="${PSID}" ./psid_reset || { printf "\n${RED}WARNING: incorrect PSID provided\n"; exit 1; }
+
+# suffix
+if DEV=$DEV PIN="${PSID}XXX" ./psid_reset; then
+	printf "\n${RED}WARNING: incorrect PSID accepted (correct PSID + suffix)\n"
+	exit 1
+fi
+
+printf "\nPSID OK\n"
+
