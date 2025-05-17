@@ -1,11 +1,8 @@
 #!/bin/bash
 
 ##################################### TMP; will be configured elsewhere
-PINA="0000"
-USER=1
-PIN="1111"
-LR=1
-PSID=3735343431383532373134323932333233373639313930333437383037323330
+PIN_ADMIN="0000"
+PIN_USER="1111"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -53,55 +50,52 @@ function compare_imgs()
 }
 
 function create_images() {
-    ${OLDPWD}/utils/update_submodule || exit 1;
+    ${OLDPWD}/utils/update_submodules || exit 1;
 
     [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH=${OLDPWD}/opal-toolset
 
     # Check if device exists
     lsblk $DEV 1>/dev/null || exit 1;
 
-    # PSID reset
-    DEV=$DEV PIN=$PSID CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/psid_reset || exit 1
+    printf "\n[PSID RESET]\n"
+    DEV=$DEV PSID=$PSID CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/psid_reset -q || exit 1
 
     create_reference_images
     dd_write_ones
     dd_read_img 1_clean.img
 
-    # Create admin
-    DEV=$DEV ADMIN_PIN=$PINA CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/set_admin_pin || exit 1
+    printf "\n[CREATE ADMIN]\n"
+    DEV=$DEV ADMIN_PIN=$PIN_ADMIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/set_admin_pin -q || exit 1
 
-    # Create user
-    DEV=$DEV ADMIN_VERIFY_PIN=$PINA USER_ASSIGN_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH \
-    ${OLDPWD}/set_user || exit 1
+    printf "\n[CREATE USER]\n"
+    DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN USER_ASSIGN_PIN=$PIN_USER CONTROL_PATH=$OPAL_TOOLSET_PATH \
+    ${OLDPWD}/set_user -q || exit 1
 
-    # Create locking range
-    DEV=$DEV ADMIN_VERIFY_PIN=$PINA USER_ASSIGN_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH \
-    LR_START=$START LR_LENGTH=$LENGTH ${OLDPWD}/set_locking_range || exit 1
+    printf "\n[CREATE LR]\n"
+    DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN USER_ASSIGN_PIN=$PIN_USER CONTROL_PATH=$OPAL_TOOLSET_PATH \
+    LR_START=$START LR_LENGTH=$LENGTH ${OLDPWD}/set_locking_range -q || exit 1
 
     # List the locking range
-    DEV=$DEV USER_VERIFY_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range || exit 1
+    DEV=$DEV PIN=$PIN_USER AUTHORITY=user CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range -q || exit 1
 
     dd_read_img 2_lr1.img
     dd_write_ones
     dd_read_img 2_lr2.img
 
-    # Lock and list the locking range
-    DEV=$DEV PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/lock_lr || exit 1
-    DEV=$DEV USER_VERIFY_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range || exit 1
+    printf "\n[LOCK LR]\n"
+    DEV=$DEV PIN=$PIN_USER AUTHORITY=user CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/lock_lr -q || exit 1
+    DEV=$DEV PIN=$PIN_USER AUTHORITY=user CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range -q || exit 1
 
-    # Unlock and list the locking range
-    DEV=$DEV PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/unlock_lr || exit 1
-    DEV=$DEV USER_VERIFY_PIN=$PIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range || exit 1
+    printf "\n[UNLOCK LR]\n"
+    DEV=$DEV PIN=$PIN_USER AUTHORITY=user CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/unlock_lr -q || exit 1
+    DEV=$DEV PIN=$PIN_USER AUTHORITY=user CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/list_locking_range -q || exit 1
 
     dd_read_img 4_lr1_unlocked.img
 
-    # Regenerate encryption key
-    DEV=$DEV ADMIN_VERIFY_PIN=$PINA CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/regenerate_lr_key || exit 1
+    printf "\n[REGENERATE KEY]\n"
+    DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/regenerate_lr_key -q || exit 1
 
     dd_read_img 5_lr3_unlocked.img
-
-    # PSID reset
-    DEV=$DEV PIN=$PSID CONTROL_PATH=$OPAL_TOOLSET_PATH ${OLDPWD}/psid_reset || exit 1
 
     compare_imgs
 }
