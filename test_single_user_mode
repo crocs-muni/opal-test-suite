@@ -5,43 +5,22 @@
 ##################################### TMP; will be configured elsewhere
 PIN_ADMIN="1010"
 PIN_USER="1111"
-PSID=3735343431383532373134323932333233373639313930333437383037323330
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 #####################################
 
-PATTERN_FILE=pattern.img
-UNLOCKED_PATTERN_FILE=unlocked_pattern.img
-LOCKED_UNLOCKED_PATTERN_FILE=locked_unlocked_pattern.img
+source source/lr_misc
 
+LOGDIR=log
+LOGDIR_ME=${LOGDIR}/${DEV_ID}_test_single_user_mode_$(date "+%F_%T")
+[ -z "$DEV_ID" ] && LOGDIR_ME=${LOGDIR}/test_single_user_mode_$(date "+%F_%T")
 
-function dd_read_img()
-{
-    sudo dd if=$DEV of=$3 bs=$BS skip=$1 count=$2 iflag=direct status=none
-}
+PATTERN_FILE=${LOGDIR_ME}/pattern.img
+UNLOCKED_PATTERN_FILE=${LOGDIR_ME}/unlocked_pattern.img
+LOCKED_UNLOCKED_PATTERN_FILE=${LOGDIR_ME}/locked_unlocked_pattern.img
 
-function dd_write()
-{
-    sudo dd if=$3 of=$DEV bs=$BS seek=$1 count=$2 oflag=direct status=none
-}
-
-function set_read_write_permissions()
-{
-    local LR_ID=$1
-    local READ=$2
-    local WRITE=$3
-
-    if [ $READ -eq 0 ];  then READ_OP="enable";  else READ_OP="disable";  fi
-    if [ $WRITE -eq 0 ]; then WRITE_OP="enable"; else WRITE_OP="disable"; fi
-
-    printf "\n[LR SET PERMISSIONS] LR ${LR_ID}, ${WRITE_OP} write, ${READ_OP} read\n"
-    DEV=$DEV PIN_USER=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID READ=$READ WRITE=$WRITE ./lock_lr -q || exit 1
-    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID ./list_locking_range -q || return 1
-    printf "[LR SET PERMISSIONS] LR ${LR_ID}: OK\n"
-
-}
 
 function sum_lr_def()
 {
@@ -50,40 +29,12 @@ function sum_lr_def()
     local LR_ID=$3
 
     printf "\n[SINGLE USER MODE LR DEF] LR ${LR_ID}, LR start: ${LR_START}, LR length: ${LR_LENGTH}\n"
-    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID LR_START=$LR_START LR_LENGTH=$LR_LENGTH ./set_locking_range_sum -q || exit 1
-    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID ./list_locking_range -q || return 1
+    DEV=$DEV USER_VERIFY_PIN=$PIN_USER LR_ID=$LR_ID USER_ID=$USER_ID LR_START=$LR_START LR_LENGTH=$LR_LENGTH ./set_locking_range_sum -q || return 1
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH "no" "no" "yes" "yes" user || return 1
     printf "[SINGLE USER MODE LR DEF] LR ${LR_ID}: OK\n"
 }
 
-function check_lock_unlock_data_integrity()
-{
-    local LR_START=$1
-    local LR_LENGTH=$2
-    local LR_ID=$3
-    local LR_N_BLOCKS=$(($LR_LENGTH / $BS))
-
-    dd_write $(($LR_START / $BS)) $LR_N_BLOCKS $4
-    dd_read_img $(($LR_START / $BS)) $LR_N_BLOCKS $UNLOCKED_PATTERN_FILE
-    cmp $UNLOCKED_PATTERN_FILE $4 || {
-        printf "\n${RED}[FATAL] read data of LR ${LR_ID} is not the same as data written${NC}\n"
-        return 1
-    }
-
-    # Lock LR
-    set_read_write_permissions $LR_ID 1 1
-
-    # Unlock LR
-    set_read_write_permissions $LR_ID 0 0
-
-    dd_read_img $(($LR_START / $BS)) $LR_N_BLOCKS $LOCKED_UNLOCKED_PATTERN_FILE
-    cmp $LOCKED_UNLOCKED_PATTERN_FILE $4 || {
-        printf "\n${RED}[FATAL] decrypted data of LR ${LR_ID} is not the same as data written before encryption${NC}\n"
-        return 1
-    }
-}
-
-
-utils/update_submodule || exit 1
+utils/update_submodules || exit 1
 
 [ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
 CONTROL=$CONTROL_PATH/control
@@ -96,12 +47,14 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$LR_ID" ] && LR_ID=1
 [ -z "$USER_ID" ] && USER_ID=2
 
+[ ! -e $LOGDIR ] && mkdir $LOGDIR
+[ ! -e $LOGDIR_ME ] && mkdir $LOGDIR_ME
 
 # SETUP
 #______________________________________________________________________________
 
 # PSID reset
-DEV=$DEV PIN=$PSID ./psid_reset -q || exit 1
+DEV=$DEV PSID=$PSID ./psid_reset -q || exit 1
 
 # Set admin
 DEV=$DEV ADMIN_PIN=$PIN_ADMIN ./set_admin_pin_sum -q || exit 1
@@ -114,20 +67,235 @@ rm $PATTERN_FILE 2>/dev/null
 sudo dd if=/dev/random of=$PATTERN_FILE bs=$BS count=3 status=none
 
 
-# DEFINE SUM LR, DATA INTEGRITY CHECK
+# DEFINE SUM LR
 #______________________________________________________________________________
+printf "\n[BASIC SUM LOCKING RANGE DEFINITION]\n"
+
 LR_START=$BS
 LR_LENGTH=$(($BS * 3))
 
-sum_lr_def $LR_START $LR_LENGTH $LR_ID || printf "${RED}[FATAL] basic definition of a locking range failed${NC}\n"
+sum_lr_def $LR_START $LR_LENGTH $LR_ID || {
+    printf "${RED}[FATAL] basic definition of a locking range failed, other tests are skipped${NC}\n"
+    exit 1
+}
+
+printf "\n${GREEN}[BASIC SUM LOCKING RANGE DEFINITION] OK${NC}\n"
+
+# DATA INTEGRITY
+#______________________________________________________________________________
+printf "\n[DATA INTEGRITY]\n"
+DATA_INTEGRITY_VIOLATION=false
 
 if check_lock_unlock_data_integrity $LR_START $LR_LENGTH $LR_ID $PATTERN_FILE; then
-    printf "\n[DATA INTEGRITY] LR ${LR_ID}: OK\n"
-    # TODO remove generated files once sure reading from drive is implemented correctly
+    printf "\n${GREEN}[DATA INTEGRITY] OK${NC}\n"
 else
-    printf "${RED}[FATAL] data integrity violated; \
-    compare pattern written onto drive in ${PATTERN_FILE} and patterns \
-    obtained from drive in ${UNLOCKED_PATTERN_FILE}, ${LOCKED_UNLOCKED_PATTERN_FILE}${NC}\n"
+    DATA_INTEGRITY_VIOLATION=true
+    printf "${RED}[DATA INTEGRITY] NOK\n"
+    printf "compare pattern written onto drive in ${PATTERN_FILE} and patterns"
+    printf "obtained from drive in ${UNLOCKED_PATTERN_FILE}, ${LOCKED_UNLOCKED_PATTERN_FILE}${NC}\n"
 fi
 
-# TODO check if admin can access SUM LR once enabled in opal-toolset
+# SUM ACCESS CONTROL
+#______________________________________________________________________________
+printf "\n[SUM ACCESS CONTROL]\n"
+ACCESS_CONTROL_VIOLATION=false
+
+# Try to lock LR by admin, should fail
+set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 admin \
+    2>/dev/null \
+    && printf "\n${RED}[FATAL]: admin locked a Single User Mode LR${NC}\n" \
+    && ACCESS_CONTROL_VIOLATION=true
+
+# Lock LR by user
+[ $ACCESS_CONTROL_VIOLATION != "true" ] && set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 user \
+    || {
+        printf "\n${RED}[FATAL]: failed to lock LR by user when it should be possible${NC}\n"
+        ACCESS_CONTROL_VIOLATION=true
+}
+
+# Try to unlock LR by admin, should fail
+[ $ACCESS_CONTROL_VIOLATION != "true" ] && set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0 admin \
+    2>/dev/null \
+    && printf "\n${RED}[FATAL]: admin unlocked a Single User Mode LR${NC}\n" \
+    && ACCESS_CONTROL_VIOLATION=true
+
+if [ $ACCESS_CONTROL_VIOLATION == "false" ]; then printf "\n${GREEN}[SUM ACCESS CONTROL] OK${NC}\n"; else printf "\n${RED}[SUM ACCESS CONTROL] NOK${NC}\n"; fi
+
+# REACTIVATE
+#______________________________________________________________________________
+printf "\n[REACTIVATE]\n"
+REACTIVATE_FAILURE=false
+
+# Lock LR by user
+set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 user \
+    || {
+        printf "\n${RED}[FATAL]: failed to lock LR by user when it should be possible${NC}\n"
+        REACTIVATE_FAILURE=true
+}
+
+# Disable LR locking
+printf "\n[DISABLE LR LOCKING] LR ${LR_ID}\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_enable_range $DEV \
+        --locking-range $LR_ID \
+        --read-lock-enabled 0 \
+        --write-lock-enabled 0 \
+        --user $USER_ID \
+        --verify-pin $PIN_USER \
+        || {
+            printf "\n${RED}[WARNING]: failed to disable LR locking${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH "yes" "yes" "no" "no" user || REACTIVATE_FAILURE=true
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[DISABLE LR LOCKING] OK\n"; else printf "\n${RED}[DISABLE LR LOCKING] NOK${NC}\n"; fi
+
+# Reactivate without SUM
+printf "\n[REACTIVATE NO SUM] LR ${LR_ID}\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_reactivate $DEV \
+        --locking-range $LR_ID \
+        --verify-pin $PIN_ADMIN \
+        || {
+            printf "\n${RED}[WARNING]: failed to reactivate with SUM disabled${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[REACTIVATE NO SUM] OK\n"; else printf "\n${RED}[REACTIVATE NO SUM] NOK${NC}\n"; fi
+
+# Allow access of user to the LR explicitly as it might be lost after reactivate
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    DEV=$DEV USER_ID=$USER_ID LR_ID=$LR_ID ADMIN_VERIFY_PIN=$PIN_ADMIN ./add_user_lr -q || REACTIVATE_FAILURE=true
+fi
+
+# Enable LR locking
+printf "\n[ENABLE LR LOCKING] LR ${LR_ID}\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_enable_range $DEV \
+        --locking-range $LR_ID \
+        --read-lock-enabled 1 \
+        --write-lock-enabled 1 \
+        --admin 1 \
+        --verify-pin $PIN_ADMIN \
+        || {
+            printf "\n${RED}[WARNING]: failed to enable LR locking${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[ENABLE LR LOCKING] OK\n"; else printf "\n${RED}[ENABLE LR LOCKING] NOK${NC}\n"; fi
+
+# Try to unlock LR by admin, should succeed
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0 admin \
+        || {
+            printf "\n${RED}[FATAL]: failed to unlock LR by admin when it should be possible${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+fi
+
+# Try to lock LR by admin, should succeed
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 admin \
+        || {
+            printf "\n${RED}[FATAL]: failed to lock LR by admin when it should be possible${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+fi
+
+# Disable LR locking
+printf "\n[DISABLE LR LOCKING] LR ${LR_ID}\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_enable_range $DEV \
+        --locking-range $LR_ID \
+        --read-lock-enabled 0 \
+        --write-lock-enabled 0 \
+        --admin 1 \
+        --verify-pin $PIN_ADMIN \
+        || {
+            printf "\n${RED}[WARNING]: failed to disable LR locking${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH "yes" "yes" "no" "no" admin || REACTIVATE_FAILURE=true
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[DISABLE LR LOCKING] OK\n"; else printf "\n${RED}[DISABLE LR LOCKING] NOK${NC}\n"; fi
+
+# Reactivate into SUM
+printf "\n[REACTIVATE SUM] LR ${LR_ID}\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_reactivate $DEV \
+        --locking-range $LR_ID \
+        --verify-pin $PIN_ADMIN \
+        --sum \
+        || {
+            printf "\n${RED}[WARNING]: failed to reactivate into SUM${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[REACTIVATE SUM] OK\n"; else printf "\n${RED}[REACTIVATE SUM] NOK${NC}\n"; fi
+
+# Reset user password into original
+printf "\n[RESET USER PASSWORD]\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_password $DEV \
+        --user $USER_ID \
+        --verify-pin "" \
+        --user $USER_ID \
+        --assign-pin $PIN_USER \
+        --sum \
+        || {
+            printf "\n${RED}[WARNING]: failed to reset user password${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[RESET USER PASSWORD] OK\n"; else printf "\n${RED}[RESET USER PASSWORD] NOK${NC}\n"; fi
+
+# Enable LR locking
+printf "\n[ENABLE LR LOCKING] LR ${LR_ID}\n"
+if [ $REACTIVATE_FAILURE != "true" ]; then
+    $CONTROL setup_enable_range $DEV \
+        --locking-range $LR_ID \
+        --read-lock-enabled 1 \
+        --write-lock-enabled 1 \
+        --user $USER_ID \
+        --verify-pin $PIN_USER \
+        || {
+            printf "\n${RED}[WARNING]: failed to enable LR locking${NC}\n"
+            REACTIVATE_FAILURE=true
+    }
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH "no" "no" "yes" "yes" user || REACTIVATE_FAILURE=true
+fi
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n[ENABLE LR LOCKING] OK\n"; else printf "\n${RED}[ENABLE LR LOCKING] NOK${NC}\n"; fi
+
+printf "\n[REACTIVATE SUM ACCESS CONTROL]\n"
+
+# Try to lock LR by admin, should fail
+set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 admin \
+    2>/dev/null \
+    && printf "\n${RED}[FATAL]: admin locked a reactivated Single User Mode LR${NC}\n" \
+    && REACTIVATE_FAILURE=true
+
+# Lock LR by user
+[ $ACCESS_CONTROL_VIOLATION != "true" ] && set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 user \
+    || {
+        printf "\n${RED}[FATAL]: failed to lock LR by user when it should be possible${NC}\n"
+        REACTIVATE_FAILURE=true
+}
+
+# Try to unlock LR by admin, should fail
+[ $ACCESS_CONTROL_VIOLATION != "true" ] && set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0 admin \
+    2>/dev/null \
+    && printf "\n${RED}[FATAL]: admin unlocked a reactivated Single User Mode LR${NC}\n" \
+    && REACTIVATE_FAILURE=true
+
+if [ $REACTIVATE_FAILURE == "false" ]; then printf "\n${GREEN}[REACTIVATE] OK${NC}\n"; else printf "\n${RED}[REACTIVATE] NOK${NC}\n"; fi
+
+# OVERALL
+#______________________________________________________________________________
+if ! $DATA_INTEGRITY_VIOLATION \
+    && ! $ACCESS_CONTROL_VIOLATION \
+    && ! $REACTIVATE_FAILURE; then
+    printf "\n${GREEN}[TEST SUM LR OVERALL] OK${NC}\n"
+else
+    printf "\n${RED}[TEST SUM LR OVERALL] FAIL${NC}\n"
+    exit 1
+fi

@@ -1,19 +1,19 @@
 #!/bin/bash
 
 ##################################### TMP; will be configured elsewhere
-PINA="1010"
-USER=1
-PIN="1111"
-LR=1
-PSID=3735343431383532373134323932333233373639313930333437383037323330
+PIN_ADMIN="1010"
+PIN_USER="1111"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 #####################################
 
+source source/lr_misc
+
 LOGDIR=log
-LOGDIR_ME=${LOGDIR}/log_test_lr_defs_$(date "+%F_%T")
+LOGDIR_ME=${LOGDIR}/${DEV_ID}_test_lr_defs_$(date "+%F_%T")
+[ -z "$DEV_ID" ] && LOGDIR_ME=${LOGDIR}/test_lr_defs_$(date "+%F_%T")
 
 PATTERN_RANDOM_FILE=${LOGDIR_ME}/pattern.img
 PATTERN2_RANDOM_FILE=${LOGDIR_ME}/pattern2.img
@@ -23,112 +23,6 @@ UNLOCKED_PATTERN_FILE=${LOGDIR_ME}/unlocked_pattern.img
 LOCKED_UNLOCKED_PATTERN_FILE=${LOGDIR_ME}/locked_unlocked_pattern.img
 
 
-function dd_read()
-{
-    sudo dd if=$DEV of=$3 bs=$BS skip=$1 count=$2 iflag=direct status=none
-}
-
-function dd_write()
-{
-    sudo dd if=$3 of=$DEV bs=$BS seek=$1 count=$2 oflag=direct status=none
-}
-
-function check_lr_properties()
-{
-    local expected_lr_id=$1
-    local expected_lr_start=$2
-    local expected_lr_length=$3
-    local expected_read_locked=$4
-    local expected_write_locked=$5
-    local expected_read_lock_enabled=$6
-    local expected_write_lock_enabled=$7
-
-    local listed_lr=$(DEV=$DEV USER_VERIFY_PIN=$PIN LR_ID=$LR_ID ./list_locking_range -q)
-    printf "$listed_lr\n"
-
-    [ ! $? -eq 0 ] && printf "${RED}[FATAL] could not list LR ${expected_lr_id}${NC}\n" && return 1
-
-    local lr_id=$(printf "$listed_lr" | sed -n 's/.*Locking range \([0-9]\+\):.*/\1/p')
-    [ -z $lr_id -o "$lr_id" != "$expected_lr_id" ] && printf "${RED}[FATAL] obtained listing of incorrect LR${NC}\n" && return 1
-
-    local lr_start=$(echo "$listed_lr" | sed -n 's/.*Start: \([0-9]\+\),.*/\1/p')
-    [ -z "$lr_start" -o "$lr_start" != "$expected_lr_start" ] && {
-        printf "${RED}[FATAL] incorrect LR start was set${NC}\n"
-        printf "expected: ${expected_lr_start}; got: ${lr_start}\n"
-        return 1
-    }
-
-    local lr_length=$(echo "$listed_lr" | sed -n 's/.*length: \([0-9]\+\),.*/\1/p')
-    [ -z "$lr_length" -o "$lr_length" != "$expected_lr_length" ] && {
-        printf "${RED}[FATAL] incorrect LR length was set${NC}\n"
-        printf "expected: ${expected_lr_length}; got: ${lr_length}\n"
-        return 1
-    }
-
-    local read_locked=$(echo "$listed_lr" | sed -n 's/.*R locked: \([a-z]\+\),.*/\1/p')
-    [ -z "$read_locked" -o "$read_locked" != "$expected_read_locked" ] && {
-        printf "${RED}[FATAL] incorrect LR reading access control (read locked) was set${NC}\n"
-        printf "expected: ${expected_read_locked}; got: ${read_locked}\n"
-        return 1
-    }
-
-    local write_locked=$(echo "$listed_lr" | sed -n 's/.*W locked: \([a-z]\+\),.*/\1/p')
-    [ -z "$write_locked" -o "$write_locked" != "$expected_write_locked" ] && {
-        printf "${RED}[FATAL] incorrect LR writing access control (write locked) was set${NC}\n"
-        printf "expected: ${expected_write_locked}; got: ${write_locked}\n"
-        return 1
-    }
-
-    local read_lock_enabled=$(echo "$listed_lr" | sed -n 's/.*R lock enabled: \([a-z]\+\),.*/\1/p')
-    [ -z "$read_lock_enabled" -o "$read_lock_enabled" != "$expected_read_lock_enabled" ] && {
-        printf "${RED}[FATAL] incorrect LR reading control (read_lock_enabled) was set${NC}\n"
-        printf "expected: ${expected_read_lock_enabled}; got: ${read_lock_enabled}\n"
-        return 1
-    }
-
-    local write_lock_enabled=$(echo "$listed_lr" | sed -n 's/.*W lock enabled: \([a-z]\+\)\..*/\1/p')
-    [ -z "$write_lock_enabled" -o "$write_lock_enabled" != "$expected_write_lock_enabled" ] && {
-        printf "${RED}[FATAL] incorrect LR writing control (write_lock_enabled) was set${NC}\n"
-        printf "expected: ${expected_write_lock_enabled}; got: ${write_lock_enabled}\n"
-        return 1
-    }
-
-    return 0
-}
-
-function set_read_write_permissions()
-{
-    local LR_ID=$1
-    local LR_START=$2
-    local LR_LENGTH=$3
-    local READ=$4
-    local WRITE=$5
-
-    if [ $READ -eq 0 ]; then
-        local READ_OP="enable"
-        local READ_LOCKED="no"
-    else
-        local READ_OP="disable"
-        local READ_LOCKED="yes"
-    fi
-
-    if [ $WRITE -eq 0 ]; then
-        local WRITE_OP="enable"
-        local WRITE_LOCKED="no"
-    else
-        local WRITE_OP="disable"
-        local WRITE_LOCKED="yes"
-    fi
-
-    printf "\n[LR SET PERMISSIONS] LR ${LR_ID}, ${WRITE_OP} write, ${READ_OP} read\n"
-    DEV=$DEV PIN_USER=$PIN LR_ID=$LR_ID USER_ID=$USER_ID READ=$READ WRITE=$WRITE ./lock_lr -q || return 1
-    check_lr_properties $LR_ID $LR_START $LR_LENGTH $READ_LOCKED $WRITE_LOCKED "yes" "yes" || return 1
-    printf "[LR SET PERMISSIONS] LR ${LR_ID}: OK\n"
-
-    return 0
-
-}
-
 function check_rw_permission_combinations()
 {
     local LR_START=$1
@@ -136,7 +30,7 @@ function check_rw_permission_combinations()
     local LR_ID=$3
 
     # Complete lock
-    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1 user
 
     # Check if secured data was accessed if reading locked LR did not fail
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE 2>/dev/null \
@@ -150,7 +44,7 @@ function check_rw_permission_combinations()
     dd_write $LR_START $(($LR_LENGTH / $BS)) $PATTERN_ONES_FILE 2>/dev/null \
         && RW_ERROR=true \
         && printf "${RED}[FATAL] writing to locked LR ${LR_ID} permitted${NC}\n" \
-        && set_read_write_permissions $LR_ID 0 1 \
+        && set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 1 user \
         && dd_read $LR_START $(($LR_LENGTH / $BS)) $UNLOCKED_PATTERN_FILE \
         && ( cmp $UNLOCKED_PATTERN_FILE $PATTERN_RANDOM_FILE >/dev/null || {
                 printf "${RED}[FATAL] data corruption: locked LR ${LR_ID} overwritten${NC}\n"
@@ -159,7 +53,7 @@ function check_rw_permission_combinations()
         )
 
     # Read allowed, write locked
-    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 1
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 1 user
 
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE || {
         RW_ERROR=true
@@ -178,7 +72,7 @@ function check_rw_permission_combinations()
         )
 
     # Read locked, write allowed
-    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 0
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 0 user
 
     # Check if secured data was accessed if reading locked LR did not fail
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE 2>/dev/null \
@@ -194,7 +88,7 @@ function check_rw_permission_combinations()
     }
 
     # Complete unlock
-    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0
+    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0 user
 
     dd_read $LR_START $(($LR_LENGTH / $BS)) $LOCKED_PATTERN_FILE || {
         RW_ERROR=true
@@ -213,35 +107,6 @@ function check_rw_permission_combinations()
     return 0
 }
 
-function check_lock_unlock_data_integrity()
-{
-    local LR_START=$1
-    local LR_LENGTH=$2
-    local LR_ID=$3
-    local LR_N_BLOCKS=$(($LR_LENGTH / $BS))
-
-    dd_write $LR_START $LR_N_BLOCKS $4
-    dd_read $LR_START $LR_N_BLOCKS $UNLOCKED_PATTERN_FILE
-    cmp $UNLOCKED_PATTERN_FILE $4 || {
-        printf "\n${RED}[FATAL] read data of LR ${LR_ID} is not the same as data written${NC}\n"
-        return 1
-    }
-
-    # Lock LR
-    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 1 1
-
-    # Unlock LR
-    set_read_write_permissions $LR_ID $LR_START $LR_LENGTH 0 0
-
-    dd_read $LR_START $LR_N_BLOCKS $LOCKED_UNLOCKED_PATTERN_FILE
-    cmp $LOCKED_UNLOCKED_PATTERN_FILE $4 || {
-        printf "\n${RED}[FATAL] decrypted data of LR ${LR_ID} is not the same as data written before encryption${NC}\n"
-        return 1
-    }
-
-    return 0
-}
-
 function basic_lr_def()
 {
     local LR_START=$1
@@ -249,8 +114,8 @@ function basic_lr_def()
     local LR_ID=$3
 
     printf "\n[BASIC LR DEF] LR ${LR_ID}, LR start: ${LR_START}, LR length: ${LR_LENGTH}\n"
-    DEV=$DEV ADMIN_VERIFY_PIN=$PINA LR_ID=$LR_ID LR_START=$LR_START LR_LENGTH=$LR_LENGTH ./set_locking_range -q || return 1
-    check_lr_properties $LR_ID $LR_START $LR_LENGTH "no" "no" "yes" "yes" || return 1
+    DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN LR_ID=$LR_ID LR_START=$LR_START LR_LENGTH=$LR_LENGTH ./set_locking_range -q || return 1
+    check_lr_properties $LR_ID $LR_START $LR_LENGTH "no" "no" "yes" "yes" user || return 1
     printf "[BASIC LR DEF] LR ${LR_ID}: OK\n"
 
     if [ ! $LR_LENGTH -eq 0 ]; then
@@ -273,10 +138,11 @@ function print_active_lrs()
     printf "]\n"
 }
 
+
 declare -A lr_starts
 declare -A lr_lengths
 
-utils/update_submodule || exit 1
+utils/update_submodules || exit 1
 
 [ -z "$CONTROL_PATH" ] && CONTROL_PATH="opal-toolset"
 CONTROL=$CONTROL_PATH/control
@@ -286,6 +152,7 @@ CONTROL=$CONTROL_PATH/control
 [ -z "$PSID" ] && printf "WARNING: variable PSID must be defined, test skipped\n" && exit 1
 
 [ -z "$BS" ] && BS=512
+[ -z "$USER_ID" ] && USER_ID=1
 
 [ ! -e $LOGDIR ] && mkdir $LOGDIR
 [ ! -e $LOGDIR_ME ] && mkdir $LOGDIR_ME
@@ -295,13 +162,13 @@ CONTROL=$CONTROL_PATH/control
 #______________________________________________________________________________
 
 # PSID reset
-DEV=$DEV PIN=$PSID ./psid_reset -q || exit 1
+DEV=$DEV PSID=$PSID ./psid_reset -q || exit 1
 
 # Set admin
-DEV=$DEV ADMIN_PIN=$PINA ./set_admin_pin -q || exit 1
+DEV=$DEV ADMIN_PIN=$PIN_ADMIN ./set_admin_pin -q || exit 1
 
 # Set user
-DEV=$DEV ADMIN_VERIFY_PIN=$PINA USER_ASSIGN_PIN=$PIN ./set_user -q || exit 1
+DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN USER_ASSIGN_PIN=$PIN_USER ./set_user -q || exit 1
 
 
 # TEST BASIC LR DEFS, MINIMAL AMOUNT OF DEFINABLE LRS
@@ -348,7 +215,10 @@ sudo dd if=/dev/random of=$PATTERN_RANDOM_FILE bs=$BS count=$(($LR_LENGTH / $BS)
 
 basic_lr_def $LR_START $LR_LENGTH $LR_ID || printf "${RED}[FATAL] basic definition of a locking range failed${NC}\n"
 ( [ ${lr_starts[$LR_ID]} -eq $LR_START ] && check_lock_unlock_data_integrity $LR_START $LR_LENGTH $LR_ID $PATTERN_RANDOM_FILE ) \
-    || printf "${RED}[FATAL] data integrity violated${NC}\n"
+    || {
+        printf "${RED}[FATAL] data integrity violated${NC}\n"
+        DATA_INTEGRITY_VIOLATION=true
+    }
 
 LR2_START=$((1024 * 1024 * 100)) # * 512 = 50 GiB offset
 LR2_LENGTH=$((1024 * 1024 )) # = 1 MiB
@@ -360,7 +230,10 @@ sudo dd if=/dev/random of=$PATTERN2_RANDOM_FILE bs=$BS count=$(($LR2_LENGTH / $B
 
 basic_lr_def $LR2_START $LR2_LENGTH $LR2_ID || printf "${RED}[FATAL] basic definition of a locking range failed${NC}\n"
 ( [ ${lr_starts[$LR2_ID]} -eq $LR2_START ] && check_lock_unlock_data_integrity $LR2_START $LR2_LENGTH $LR2_ID $PATTERN2_RANDOM_FILE ) \
-    || printf "${RED}[FATAL] data integrity violated${NC}\n"
+    || {
+        printf "${RED}[FATAL] data integrity violated${NC}\n"
+        DATA_INTEGRITY_VIOLATION=true
+    }
 
 if [ $DATA_INTEGRITY_VIOLATION == "false" ]; then printf "\n${GREEN}[DATA INTEGRITY] OK${NC}\n"; else printf "\n${RED}[DATA INTEGRITY] NOK${NC}\n"; fi
 
@@ -418,7 +291,7 @@ for id in ${!lr_starts[@]}; do
     basic_lr_def ${lr_starts[$id]} 0 $id || printf "${RED}[FATAL] deactivating LR ${id} failed${NC}\n"
 done
 
-# LR OVELAPS
+# LR OVERLAPS
 #______________________________________________________________________________
 OVERLAP=false
 printf "\n[OVERLAPPING LR DEFS]\n"

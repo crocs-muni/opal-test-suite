@@ -15,14 +15,18 @@ source .config
 [ "$DEV" = "unset" ] && printf "Configure test parameters in .config before running this test.\n" && exit 1
 
 # Test
-DEV=$DEV PIN=$PSID_HEX ./psid_reset || exit 1
+DEV=$DEV PSID=$PSID ./psid_reset || exit 1
 
-DEV=$DEV ADMIN_PIN=$ADMIN_PIN ./set_admin_pin || exit 1
+DEV=$DEV ADMIN_PIN=$PIN_ADMIN ./set_admin_pin || exit 1
 
-DEV=$DEV ADMIN_VERIFY_PIN=$ADMIN_PIN USER_ASSIGN_PIN=$USER_PIN ./set_locking_range || exit 1
+DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN USER_ASSIGN_PIN=$PIN_USER ./set_user || exit 1
 
-DEV=$DEV USER_VERIFY_PIN=$USER_PIN ./list_locking_range || exit 1
+DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN ./set_locking_range || exit 1
 
-DEV=$DEV ADMIN_VERIFY_PIN=$ADMIN_PIN ./regenerate_lr_key || exit 1
+DEV=$DEV PIN=$PIN_USER AUTHORITY="user" ./list_locking_range || exit 1
 
-printf "\n${GREEN}scenario_basic: all tests finished successfully${NC}\n"
+DEV=$DEV PIN=$PIN_USER LR_ID=$LR_ID AUTHORITY="user" ./lock_lr || exit 1
+
+DEV=$DEV ADMIN_VERIFY_PIN=$PIN_ADMIN ./regenerate_lr_key || exit 1
+
+printf "\n${GREEN}[BASIC OPERATIONS] all operations finished successfully${NC}\n"

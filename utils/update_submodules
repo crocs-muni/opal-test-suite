@@ -1,0 +1,25 @@
+#!/bin/bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")/.." ; pwd -P )
+
+pushd $parent_path
+
+OPAL_TOOLSET_SUBMODULE_PATH=opal-toolset
+TCG_STORAGE_TOOLS_SUBMODULE_PATH=tcg-storage-tools
+
+printf "Updating submodules ...\n"
+
+git submodule update --recursive --remote --init --force \
+    || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
+
+printf "\nBuilding opal-toolset ...\n"
+
+( cd "$OPAL_TOOLSET_SUBMODULE_PATH" && make ) \
+    || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+
+printf "\nBuilding tcg-storage-tools ...\n"
+
+( cd "$TCG_STORAGE_TOOLS_SUBMODULE_PATH" && make ) \
+    || { printf "\n${RED}Build of tcg-storage-tools failed, unable to continue${NC}\n" && exit 1; }
+
+popd >/dev/null

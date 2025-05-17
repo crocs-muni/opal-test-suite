@@ -9,19 +9,20 @@ CONTROL=$CONTROL_PATH/control
 [ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
 
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
-[ -z "$USER_VERIFY_PIN" ] && printf "WARNING: Variable USER_VERIFY_PIN must be defined (user pin in hexadecimal with rights to access the corresponding locking range), test skipped.\n" && exit 1
+[ -z "$PIN" ] && printf "WARNING: Variable PIN must be defined, test skipped.\n" && exit 1
+[ -z "$AUTHORITY" ] && printf "WARNING: Variable AUTHORITY must be defined ("user" or "admin"), test skipped.\n" && exit 1
 
 [ -z "$LR_ID" ] && LR_ID=1
-[ -z "$USER_ID" ] && USER_ID=1
+[ -z "$AUTH_ID" ] && AUTH_ID=1
 
 [ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
 if [ $QUIET == "false" ]; then printf "Listing locking range...\n\n"; fi
 
-$CONTROL $VERBOSE list_range $DEV     \
-	--locking-range $LR_ID            \
-	--user $USER_ID                   \
-	--verify-pin-hex=$USER_VERIFY_PIN \
+$CONTROL $VERBOSE list_range $DEV \
+	--locking-range $LR_ID \
+	--${AUTHORITY} $AUTH_ID \
+	--verify-pin $PIN \
 	||  { printf "\nFailed to list the locking range.\n" && exit 1; }
 
 if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi

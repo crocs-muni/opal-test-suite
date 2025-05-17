@@ -9,21 +9,22 @@ CONTROL=$CONTROL_PATH/control
 [ ! -f "$CONTROL" ] && printf "Invalid path $CONTROL.\n" && exit 1
 
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
-[ -z "$PIN_USER" ] && printf "WARNING: Variable PIN_USER must be defined, test skipped.\n" && exit 1
+[ -z "$PIN" ] && printf "WARNING: Variable PIN must be defined (user or admin PIN), test skipped.\n" && exit 1
+[ -z "$AUTHORITY" ] && printf "WARNING: Variable AUTHORITY must be defined ("user" or "admin"), test skipped.\n" && exit 1
 
 [ -z "$LR_ID" ] && LR_ID=1
-[ -z "$USER_ID" ] && USER_ID=1
+[ -z "$AUTH_ID" ] && AUTH_ID=1
 [ -z "$READ" ] && READ=1
 [ -z "$WRITE" ] && WRITE=1
 
 [ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
-if [ $QUIET == "false" ]; then printf "Locking locking range (id $LR_ID)...\n\n"; fi
+if [ $QUIET == "false" ]; then printf "Locking LR ${LR_ID} by ${AUTHORITY} ${AUTH_ID}...\n\n"; fi
 
 $CONTROL $VERBOSE unlock $DEV   \
     --locking-range $LR_ID      \
-    --user $USER_ID             \
-    --verify-pin-hex $PIN_USER  \
+    --${AUTHORITY} $AUTH_ID     \
+    --verify-pin $PIN           \
     --read-locked $READ         \
     --write-locked $WRITE       \
     || { printf "\nFailed to lock the locking range.\n" && exit 1; }

@@ -10,16 +10,20 @@ CONTROL=$CONTROL_PATH/control
 
 [ -z "$DEV" ] && printf "WARNING: Variable DEV must be defined (partition or block device), test skipped.\n" && exit 1
 [ -z "$ADMIN_VERIFY_PIN" ] && printf "WARNING: Variable ADMIN_VERIFY_PIN must be defined, test skipped.\n" && exit 1
+[ -z "$USER_ID" ] && printf "WARNING: Variable USER_ID (user to give access rights) must be defined, test skipped.\n" && exit 1
 
 [ -z "$LR_ID" ] && LR_ID=1
 [ -z "$ADMIN_ID" ] && ADMIN_ID=1
 
-if [ $QUIET == "false" ]; then printf "Regenerating locking range key...\n\n"; fi
+[ $# -eq 1 ] && [ "$1" == "-q" ] && QUIET=true && unset VERBOSE
 
-$CONTROL $VERBOSE regenerate_key $DEV	\
-	--locking-range $LR_ID              \
-	--admin $ADMIN_ID                   \
-	--verify-pin $ADMIN_VERIFY_PIN      \
-	|| { printf "\nFailed to regenerate key of locking range witd id $LR_ID.\n" && exit 1; }
+if [ $QUIET == "false" ]; then printf "Adding access rights of user ${USER_ID} to LR ${LR_ID}...\n\n"; fi
+
+$CONTROL $VERBOSE add_user_range $DEV \
+    --locking-range $LR_ID \
+    --user $USER_ID \
+    --admin $ADMIN_ID \
+    --verify-pin $ADMIN_VERIFY_PIN \
+    || { printf "\nFailed to add access.\n" && exit 1; }
 
 if [ $QUIET == "false" ]; then printf "\nDone.\n"; fi
