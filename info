@@ -11,6 +11,8 @@ FEATURE_LOCKING=false
 FEATURE_OPAL=false
 FEATURE_PYRITE=false
 FEATURE_SINGLE_USER_MODE=false
+FEATURE_BLOCK_SID=false
+FEATURE_DATASTORE=false
 
 OPAL2=false
 
@@ -173,6 +175,16 @@ while read -r feature; do
             features+=("$feature")
             ;;
 
+        "Block SID Authentication Feature")
+            FEATURE_BLOCK_SID=true
+            features+=("$feature")
+            ;;
+
+        "DataStore Table Feature")
+            FEATURE_DATASTORE=true
+            features+=("$feature")
+            ;;
+
         "Pyrite SSC V1 Feature")
             if [ "$FEATURE_PYRITE" == "false" ]; then
                 PYRITE_VERSION="1.0"
@@ -210,7 +222,6 @@ if [ $FEATURE_TPER == false ]; then
 fi
 
 echo
-# TODO other SSCs
 if [ $FEATURE_OPAL == true ]; then
     printf "SSC: Opal\n"
     json_report "SSC" "Opal"
@@ -229,7 +240,7 @@ if [ $OPAL2 == "true" ]; then
     if [ "$MINOR_VERSION" == "30" ]; then
         printf "SSC version: 2.30\n"
         json_report "SSC version" "2.30"
-    elif [ "$OPAL_VERSION" == "unknown" ]; then
+    elif [ "$MINOR_VERSION" == "unknown" ]; then
         printf "SSC version: unknown (not detectable)\n"
         json_report "SSC version" "unknown"
     else
@@ -301,6 +312,16 @@ fi
 if [ $FEATURE_PYRITE == true -a $MEDIA_ENCRYPTION == "1" ]; then
     printf "${RED}[TCG violation] drive implements Pyrite but claims hardware encryption${NC}\n"
     json_append_array "TCG violation" "drive implements Pyrite but claims hardware encryption"
+fi
+
+if [ $FEATURE_OPAL == true -a $FEATURE_BLOCK_SID == false ]; then
+    printf "${RED}[TCG violation] drive does not implement the mandatory Block SID feature set${NC}\n"
+    json_append_array "TCG violation" "drive does not implement the mandatory Block SID feature set"
+fi
+
+if [ $FEATURE_OPAL == true -a $FEATURE_DATASTORE == false ]; then
+    printf "${RED}[TCG violation] drive does not implement the mandatory Additional DataStore Table feature set${NC}\n"
+    json_append_array "TCG violation" "drive does not implement the mandatory Additional DataStore Table feature set"
 fi
 
 echo
