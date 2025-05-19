@@ -44,7 +44,10 @@ CONTROL=$CONTROL_PATH/control
 
 SUM_SUPPORTED=$(get_info_value '"single user mode"')
 [ ! $? -eq 0 ] && printf "WARNING: could not resolve SUM support, test skipped\n" && exit 1
-[ $SUM_SUPPORTED != "supported" ] && printf "WARNING: SUM feature is not supported by ${DEV}, test skipped\n" && exit 1
+if [ "$SUM_SUPPORTED" != "supported" ]; then
+    printf "WARNING: SUM feature is not supported by ${DEV}, test skipped\n"
+    exit 1
+fi
 
 [ -z "$BS" ] && BS=512
 [ -z "$LR_ID" ] && LR_ID=1
