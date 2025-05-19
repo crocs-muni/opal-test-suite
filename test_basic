@@ -10,9 +10,11 @@ git submodule update --init --remote --merge >/dev/null || { printf "\n${RED}ERR
 ( cd opal-toolset && make >/dev/null 2>&1 ) || { printf "\n${RED}ERROR: build of opal-toolset failed, test cancelled${NC}\n" && exit 1; }
 echo
 
-# Load test parameters
-source .config
-[ "$DEV" = "unset" ] && printf "Configure test parameters in .config before running this test.\n" && exit 1
+[ -z "$DEV" ] && printf "WARNING: variable DEV must be defined (partition or block device), test skipped\n" && exit 1
+[ -z "$PSID" ] && printf "WARNING: variable PSID must be defined, test skipped\n" && exit 1
+PIN_ADMIN=0000
+PIN_USER=1111
+LR_ID=1
 
 # Test
 DEV=$DEV PSID=$PSID ./psid_reset || exit 1
