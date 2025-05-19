@@ -1,0 +1,21 @@
+#!/bin/bash
+
+INFO_HOLDER=info.json
+if [ ! -e $INFO_HOLDER ]; then
+    printf "Executing info retrieval ...\n"
+    DEV=$DEV ./info > /dev/null 2>&1
+fi
+
+# Obtain values from the JSON file with drive info
+# Arguments:
+#   $1:   key of the value to obtain
+function get_info_value ()
+{
+    [ -z $INFO_HOLDER ] && printf "WARNING: missing info handle\n" && return 1
+
+    local _value=$(jq -r ".${1}" $INFO_HOLDER)
+
+    [ $? -ne 0 ] && printf "WARNING: unable to obtain ${1}\n" && return 1
+
+    printf "$_value"
+}
