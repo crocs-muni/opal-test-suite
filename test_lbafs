@@ -6,7 +6,8 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-function get_discovery_lbafs {
+function get_discovery_lbafs ()
+{
     _size=$($DISCOVERY $DEV 3 | jq -r '."Discovery 0"."Geometry Feature".LogicalBlockSize')
 
     [ $? -ne 0 ] &&
@@ -16,10 +17,24 @@ function get_discovery_lbafs {
     printf $_size
 }
 
+function revert_lbafs ()
+{
+    # Revert the LBA size to original
+    nvme format --block-size=$ORIG_IOCTL_LBAFS $DEV --force >/dev/null
+    if [ $? -eq 0 ]; then
+        printf "Sector size was reverted to the original value.\n"
+    else
+        printf "\n${RED}Setting sector size back to original failed, please retry manually using the nvme tool${NC}\n"
+    fi
+}
+
 # Update opal-toolset submodule
 printf "Updating opal-toolset ...\n"
 git submodule update --init --remote --merge >/dev/null || { printf "${RED}Submodule update failed, unable to continue${NC}\n" && exit 1; }
 ( cd opal-toolset && make >/dev/null ) || { printf "\n${RED}Build of opal-toolset failed, unable to continue${NC}\n" && exit 1; }
+
+command -v jq >/dev/null || { printf "${RED}jq command not installed; install and rerun to continue${NC}\n" && exit 1; }
+command -v nvme >/dev/null || { printf "${RED}nvme command not installed; install and rerun to continue${NC}\n" && exit 1; }
 
 [ -z "$OPAL_TOOLSET_PATH" ] && OPAL_TOOLSET_PATH="opal-toolset"
 DISCOVERY=$OPAL_TOOLSET_PATH/discovery
@@ -58,11 +73,11 @@ for size in ${avail_sizes[@]}; do
     fi
 done
 
-[ -z ${SIZE_TO_SET+x} ] && printf "\nOnly one LBA size is available for ${DEV}, test inapplicable, skipped.\n" && exit 1
+[ -z ${SIZE_TO_SET+x} ] && printf "\nOnly one LBA size is available for ${DEV}, test inapplicable, skipped\n" && exit 1
 
 # Set a different LBA size
 nvme format --block-size=$SIZE_TO_SET $DEV --force >/dev/null
-[ $? -ne 0 ] && printf "\n${RED}Setting sector size failed, unable to continue!${NC}\n" && exit 1
+[ $? -ne 0 ] && printf "\n${RED}Setting sector size failed, unable to continue${NC}\n" && exit 1
 printf "\nNew LBAF size of $SIZE_TO_SET bytes set successfully.\n\n"
 
 # Check how new LBA size is reported
@@ -76,7 +91,8 @@ NEW_DISCOVERY_LBAFS=$(get_discovery_lbafs)
 printf "$NEW_DISCOVERY_LBAFS\n"
 [ $ORIG_DISCOVERY_LBAFS -eq $NEW_DISCOVERY_LBAFS ] && printf "${RED}WARNING: Change not reported by Opal Discovery0${NC}\n"
 
-[ $NEW_IOCTL_LBAFS -ne $NEW_DISCOVERY_LBAFS ] && printf "\n${RED}FATAL: LBAF size mismatch after reformatting${NC}\n" && exit 1
+[ $NEW_IOCTL_LBAFS -ne $NEW_DISCOVERY_LBAFS ] && printf "\n${RED}FATAL: LBAF size mismatch after reformatting${NC}\n" && revert_lbafs && exit 1
 
 printf "\n${GREEN}Change of LBAFS OK\n${NC}"
 printf "New sector size was propagated and correctly reported by Opal.\n"
+revert_lbafs
