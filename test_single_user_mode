@@ -9,6 +9,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 #####################################
 
+rm info.json
 source source/lr_misc
 source source/info_misc
 
