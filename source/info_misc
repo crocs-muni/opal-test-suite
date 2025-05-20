@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 #!/bin/bash
 
 INFO_HOLDER=info.json

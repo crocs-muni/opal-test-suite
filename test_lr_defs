@@ -2,14 +2,12 @@
 
 #!/bin/bash
 
-##################################### TMP; will be configured elsewhere
 PIN_ADMIN="1010"
 PIN_USER="1111"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
-#####################################
 
 source source/lr_misc
 
