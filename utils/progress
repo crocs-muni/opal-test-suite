@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 #!/bin/bash
 
 let "_progress = (${1} * 100 / ${2} * 100) / 100"
